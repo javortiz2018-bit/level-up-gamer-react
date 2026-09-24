@@ -1,164 +1,149 @@
-import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import React from "react";
+import { NavLink, Link } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { useCarrito } from "../context/CarritoContext";
 
-const Navbar = () => {
-  const [carritoAbierto, setCarritoAbierto] = useState(false);
+export default function Navbar() {
+  const { usuario, cerrarSesion } = useAuth();
+  const { carrito = [], abrirCarrito } = useCarrito();
 
-  const abrirCarrito = () => {
-    setCarritoAbierto(true);
-  };
-
-  const cerrarCarrito = () => {
-    setCarritoAbierto(false);
-  };
+  const totalProductos = carrito.reduce(
+    (total, item) => total + (item.cantidad || 1),
+    0
+  );
 
   return (
-    <header
-      style={{ background: "linear-gradient(90deg, #000000, #3533cd)" }}
-      className="border-b border-purple-900/50 shadow-lg sticky top-0 z-50"
-    >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-20 gap-2 sm:gap-4">
-          {/* LOGO Y NOMBRE DE LA MARCA */}
-          <div className="flex items-center">
-            <Link to="/" className="flex items-center gap-2">
-              <img
-                src="/images/Logo.png"
-                alt="Level-Up-gamer-logo"
-                className="h-10 sm:h-12 w-auto object-contain"
-              />
-              <span className="text-xl font-bold tracking-wider text-purple-400 hover:text-purple-300 hidden md:inline">
-                Level-Up <span className="text-white">Gamer</span>
+    <header className="sticky-top" style={{ backgroundColor: "#0b0f19", borderBottom: "1px solid #1e293b" }}>
+      {/* Barra Superior */}
+      <div className="container py-2 d-flex align-items-center justify-content-between gap-3">
+        <Link to="/" className="navbar-brand text-white fw-bold d-flex align-items-center gap-2">
+          <img src="images/Logo.png" alt="Level-Up Gamer" width="36" height="36" className="d-inline-block" />
+          <span style={{ color: "#fff", fontSize: "1.2rem" }}>
+            Level-Up <span style={{ color: "#a855f7" }}>Gamer</span>
+          </span>
+        </Link>
+
+        {/* Acciones */}
+        <div className="d-flex align-items-center gap-3">
+          {usuario ? (
+            <div className="d-flex align-items-center gap-2">
+              <span className="badge bg-warning text-dark px-2 py-1">
+                ⭐ {usuario.puntos || 0} pts
               </span>
-            </Link>
-          </div>
-
-          {/* BARRA DE BÚSQUEDA */}
-          <div className="flex-1 max-w-[150px] sm:max-w-xs md:max-w-md mx-2">
-            <div className="relative">
-              <input
-                id="input-busqueda"
-                type="text"
-                placeholder="Buscar..."
-                className="w-full bg-slate-900/80 text-xs sm:text-sm text-gray-200 placeholder-gray-400 pl-3 sm:pl-4 pr-8 sm:pr-10 py-2 sm:py-2.5 rounded-lg border border-purple-900/50 focus:outline-none focus:border-purple-500"
-              />
-              <span className="absolute inset-y-0 right-0 flex items-center pr-2.5 sm:pr-3 pointer-events-none text-gray-400 text-xs sm:text-sm">
-                🔍
-              </span>
-            </div>
-          </div>
-
-          {/* BOTONES DE ACCIÓN */}
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Link
-              to="/login"
-              className="hidden sm:flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold px-3.5 py-2 rounded-full transition shadow-md shadow-blue-600/30"
-            >
-              <span>👤</span> Acceso
-            </Link>
-
-            {/* Botón para abrir el Carrito */}
-            <div className="relative">
               <button
-                type="button"
-                onClick={abrirCarrito}
-                className="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 bg-rose-600 hover:bg-rose-700 text-white rounded-full transition text-sm cursor-pointer shadow-lg"
+                onClick={cerrarSesion}
+                className="btn btn-sm btn-outline-danger"
               >
-                🛒
+                {usuario.nombre} (Salir)
               </button>
-              <span
-                id="contador-carrito"
-                className="absolute -top-1 -right-1 bg-white text-rose-600 text-[10px] sm:text-xs font-bold w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center border-2 border-slate-950"
-              >
-                0
-              </span>
             </div>
-          </div>
+          ) : (
+            <Link 
+              to="/login" 
+              className="btn btn-sm fw-bold text-white px-3"
+              style={{ backgroundColor: "#2563eb", border: "none" }}
+            >
+              ACCESO
+            </Link>
+          )}
+
+          <button
+            onClick={abrirCarrito}
+            className="btn btn-sm position-relative text-white"
+            style={{ backgroundColor: "#e11d48", border: "none" }}
+            title="Ver Carrito"
+          >
+            🛒
+            {totalProductos > 0 && (
+              <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-warning text-dark">
+                {totalProductos}
+              </span>
+            )}
+          </button>
         </div>
       </div>
 
-      {/* MODAL / DESPLEGABLE DEL CARRITO DE COMPRAS */}
-      {carritoAbierto && (
-        <div
-          id="modal-carrito"
-          className="fixed inset-0 bg-black/70 z-50 flex justify-end transition-opacity"
-        >
-          <div className="bg-slate-900 border-l border-purple-900/50 w-full max-w-md h-full p-6 flex flex-col justify-between shadow-2xl">
-            <div>
-              <div className="flex items-center justify-between border-b border-purple-900/50 pb-4">
-                <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                  🛒 Tu Carrito Gamer
-                </h2>
-                <button
-                  type="button"
-                  onClick={cerrarCarrito}
-                  className="text-gray-400 hover:text-white text-2xl font-bold cursor-pointer"
-                >
-                  ×
-                </button>
-              </div>
+      {/* Menú de Navegación Oscuro estilo Cyberpunk */}
+      <nav style={{ backgroundColor: "white", borderTop: "1px solid #1e293b" }} className="py-2">
+        <div className="container d-flex justify-content-between align-items-center">
+          <div className="d-flex gap-4 fw-bold text-uppercase small">
+            <NavLink
+              to="/"
+              end
+              className={({ isActive }) =>
+                isActive 
+                  ? "text-decoration-none fw-bold" 
+                  : "text-decoration-none"
+              }
+              style={({ isActive }) => ({
+                color: isActive ? "#f43f5e" : "black"
+              })}
+            >
+              Inicio
+            </NavLink>
 
-              <div
-                id="contenedor-items-carrito"
-                className="py-8 text-center text-gray-400 text-sm overflow-y-auto max-h-[60vh]"
-              >
-                <p className="text-4xl mb-2">👾</p>
-                <p>Tu carrito está vacío por ahora.</p>
-              </div>
-            </div>
+            <NavLink
+              to="/catalogo"
+              className={({ isActive }) =>
+                isActive 
+                  ? "text-decoration-none fw-bold" 
+                  : "text-decoration-none"
+              }
+              style={({ isActive }) => ({
+                color: isActive ? "#f43f5e" : "black"
+              })}
+            >
+              Catálogo
+            </NavLink>
 
-            <div className="border-t border-purple-900/50 pt-4 space-y-4">
-              <div className="flex justify-between text-base font-bold text-white">
-                <span>Total:</span>
-                <span id="total-carrito" className="text-purple-400">
-                  $0 CLP
-                </span>
-              </div>
-              <button className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-3 rounded-lg transition cursor-pointer">
-                Finalizar Compra
-              </button>
-            </div>
+            <NavLink
+              to="/blog"
+              className={({ isActive }) =>
+                isActive 
+                  ? "text-decoration-none fw-bold" 
+                  : "text-decoration-none"
+              }
+              style={({ isActive }) => ({
+                color: isActive ? "#f43f5e" : "black"
+              })}
+            >
+              Gaming Blog
+            </NavLink>
+
+            <NavLink
+              to="/contacto"
+              className={({ isActive }) =>
+                isActive 
+                  ? "text-decoration-none fw-bold" 
+                  : "text-decoration-none"
+              }
+              style={({ isActive }) => ({
+                color: isActive ? "#f43f5e" : "black"
+              })}
+            >
+              Contacto
+            </NavLink>
+
+            <NavLink
+              to="/nosotros"
+              className={({ isActive }) =>
+                isActive 
+                  ? "text-decoration-none fw-bold" 
+                  : "text-decoration-none"
+              }
+              style={({ isActive }) => ({
+                color: isActive ? "#f43f5e" : "black"
+              })}
+            >
+              Nosotros
+            </NavLink>
           </div>
-        </div>
-      )}
 
-      {/* MENÚ INFERIOR DE NAVEGACIÓN */}
-      <nav className="bg-white text-black px-4 sm:px-6 py-2.5 border-t border-gray-200 overflow-x-auto">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 text-xs sm:text-sm font-semibold whitespace-nowrap">
-          <ul className="flex items-center gap-6">
-            <li>
-              <Link to="/" className="text-rose-600 font-bold">
-                INICIO
-              </Link>
-            </li>
-            <li>
-              <Link to="/catalogo" className="hover:text-rose-600 transition">
-                CATÁLOGO
-              </Link>
-            </li>
-            <li>
-              <Link to="/blog" className="hover:text-rose-600 transition">
-                GAMING BLOG
-              </Link>
-            </li>
-            <li>
-              <Link to="/contacto" className="hover:text-rose-600 transition">
-                CONTACTO
-              </Link>
-            </li>
-            <li>
-              <Link to="/nosotros" className="hover:text-rose-600 transition">
-                NOSOTROS
-              </Link>
-            </li>
-          </ul>
-          <div className="text-xs text-gray-500 hidden md:block">
+          <span className="small d-none d-md-inline" style={{ color: "black" }}>
             ⚡ Envíos a todo Chile
-          </div>
+          </span>
         </div>
       </nav>
     </header>
   );
-};
-
-export default Navbar;
+}

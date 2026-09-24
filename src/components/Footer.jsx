@@ -1,73 +1,82 @@
 import React from "react";
+import { Link } from "react-router-dom";
 
-export const Footer = () => {
+export default function Footer() {
   return (
-    <footer
-      style={{ background: "linear-gradient(90deg, #000000, #3533cd)" }}
-      className="border-t border-purple-900/50 text-gray-300 pt-12 pb-8 mt-20"
+    <footer 
+      className="text-white pt-5 pb-4 border-top border-secondary mt-auto" 
+      style={{ backgroundColor: "#0f172a" }}
     >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
-          {/* Columna 1: Marca */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <span className="text-2xl">🎮</span>
-              <span className="text-xl font-bold tracking-wider text-purple-400">
-                Level-Up <span className="text-white">Gamer</span>
-              </span>
+      <div className="container">
+        <div className="row g-4">
+          
+          {/* Columna 1: Level-Up Gamer */}
+          <div className="col-12 col-md-4">
+            <h5 className="text-danger fw-bold mb-3">Level-Up Gamer</h5>
+            <p className="text-secondary small pe-md-4">
+              Tu tienda especializada en tecnología gamer, periféricos, componentes de PC y asesoría profesional en Chile.
+            </p>
+          </div>
+
+          {/* Columna 2: NAVEGACIÓN */}
+          <div className="col-12 col-md-4">
+            <h6 className="text-uppercase fw-bold mb-3 text-white">NAVEGACIÓN</h6>
+            <ul className="list-unstyled small d-flex flex-column gap-2">
+              <li>
+                <Link to="/" className="text-secondary text-decoration-none hover-white">
+                  Inicio
+                </Link>
+              </li>
+              <li>
+                <Link to="/catalogo" className="text-secondary text-decoration-none hover-white">
+                  Catálogo de Productos
+                </Link>
+              </li>
+              <li>
+                <Link to="/blog" className="text-secondary text-decoration-none hover-white">
+                  Gaming Blog
+                </Link>
+              </li>
+              <li>
+                <Link to="/nosotros" className="text-secondary text-decoration-none hover-white">
+                  Sobre Nosotros
+                </Link>
+              </li>
+              <li>
+                <Link to="/contacto" className="text-secondary text-decoration-none hover-white">
+                  Contacto y Soporte
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          {/* Columna 3: ATENCIÓN AL CLIENTE */}
+          <div className="col-12 col-md-4">
+            <h6 className="text-uppercase fw-bold mb-3 text-white">ATENCIÓN AL CLIENTE</h6>
+            <ul className="list-unstyled small text-secondary d-flex flex-column gap-2 mb-3">
+              <li>📍 Santiago, Chile</li>
+              <li>✉️ contacto@levelupgamer.cl</li>
+              <li>📞 +56 9 1234 5678</li>
+            </ul>
+
+            {/* Insignias de Redes Sociales */}
+            <div className="d-flex gap-2">
+              <span className="badge bg-secondary text-white px-2 py-1 fw-normal">Instagram</span>
+              <span className="badge bg-secondary text-white px-2 py-1 fw-normal">Discord</span>
+              <span className="badge bg-secondary text-white px-2 py-1 fw-normal">Twitch</span>
             </div>
-            <p className="text-xs text-gray-400">
-              Tu tienda de confianza para los mejores accesorios de videojuegos.
-              ¡Lleva tu setup al siguiente nivel!
-            </p>
           </div>
 
-          {/* Columna 2: Navegación */}
-          <div>
-            <h3 className="text-sm font-semibold text-white tracking-wider uppercase mb-4">
-              Navegación
-            </h3>
-            <ul className="space-y-2 text-xs">
-              <li><a href="/" className="hover:text-purple-400 transition">Inicio</a></li>
-              <li><a href="/catalogo" className="hover:text-purple-400 transition">Catálogo</a></li>
-              <li><a href="/blog" className="hover:text-purple-400 transition">Gaming Blog</a></li>
-              <li><a href="/nosotros" className="hover:text-purple-400 transition">Nosotros</a></li>
-            </ul>
-          </div>
-
-          {/* Columna 3: Ayuda */}
-          <div>
-            <h3 className="text-sm font-semibold text-white tracking-wider uppercase mb-4">
-              Ayuda
-            </h3>
-            <ul className="space-y-2 text-xs">
-              <li><a href="/contacto" className="hover:text-purple-400 transition">Contacto</a></li>
-              <li><a href="#" className="hover:text-purple-400 transition">Seguimiento de envíos</a></li>
-              <li><a href="#" className="hover:text-purple-400 transition">Preguntas frecuentes</a></li>
-            </ul>
-          </div>
-
-          {/* Columna 4: Envíos */}
-          <div>
-            <h3 className="text-sm font-semibold text-white tracking-wider uppercase mb-4">
-              Envíos
-            </h3>
-            <p className="text-xs text-gray-400 mb-2">
-              ⚡ Despachos seguros a todo Chile.
-            </p>
-          </div>
         </div>
 
-        <div className="border-t border-purple-900/40 pt-6 flex flex-col sm:flex-row items-center justify-between text-xs text-gray-400 gap-4">
-          <p>&copy; 2026 Level-Up Gamer. Todos los derechos reservados.</p>
-          <div className="flex gap-4">
-            <a href="#" className="hover:text-white transition">Términos y condiciones</a>
-            <a href="#" className="hover:text-white transition">Política de Privacidad</a>
-          </div>
+        {/* Línea divisoria */}
+        <hr className="my-4 border-secondary" />
+
+        {/* Copyright */}
+        <div className="text-center text-secondary small">
+          © 2026 Level-Up Gamer. Todos los derechos reservados.
         </div>
       </div>
     </footer>
   );
-};
-
-export default Footer;
+}
