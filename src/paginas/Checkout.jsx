@@ -1,351 +1,502 @@
-import React, { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { useCarrito } from "../context/CarritoContext";
-import { useAuth } from "../context/AuthContext";
+import React, { useState, useEffect, useContext } from 'react';
+import { useForm } from 'react-hook-form';
+import { yupResolver } from '@hookform/resolvers/yup';
+import * as yup from 'yup';
 
-export default function Checkout() {
-  const {
-    carrito,
-    subtotal,
-    descuento,
-    esEstudianteDuoc,
-    total,
-    totalPuntosGanados,
-    vaciarCarrito,
-  } = useCarrito();
+// Importación del contexto
+import { CarritoContext } from '../context/CarritoContext';
 
-  const { usuario, registrarCompra, agregarPuntos } = useAuth();
-  const navigate = useNavigate();
-
-  // Estados del Formulario
-  const [nombre, setNombre] = useState(usuario?.nombre || "");
-  const [rut, setRut] = useState("");
-  const [email, setEmail] = useState(usuario?.email || "");
-  const [direccion, setDireccion] = useState("");
-  const [metodoPago, setMetodoPago] = useState("tarjeta");
-
-  // Estado de Boleta / Procesamiento
-  const [procesando, setProcesando] = useState(false);
-  const [boleta, setBoleta] = useState(null);
-
-  // Si el carrito está vacío y no hay boleta generada
-  if (carrito.length === 0 && !boleta) {
-    return (
-      <main className="container py-5 text-center text-white">
-        <h2 className="fw-bold mb-3">Tu carrito está vacío 🛒</h2>
-        <p className="text-secondary mb-4">
-          Agrega productos al carrito antes de proceder al pago.
-        </p>
-        <Link to="/catalogo" className="btn btn-primary fw-bold">
-          Ir al Catálogo
-        </Link>
-      </main>
-    );
+// --- Subcomponente del Indicador del Dólar ---
+function IndicadorDolar({ dolar, cargando, esReferencial }) {
+  if (cargando) {
+    return <div className="p-2 text-center text-muted small">💵 Cargando dólar desde API...</div>;
   }
 
-  const handleProcesarCompra = (e) => {
-    e.preventDefault();
-    setProcesando(true);
+  return (
+    <div className="p-3 bg-black bg-opacity-25 border border-success rounded my-3 text-center">
+      <span className="small text-light d-block mb-1">
+        💵 Valor Dólar {esReferencial ? '(Referencial)' : '(API mindicador.cl)'}:
+      </span>
+      <span className="fw-bold text-success">$1 USD =${dolar.toLocaleString('es-CL')} CLP</span>
+    </div>
+  );
+}
 
-    // Simulación de respuesta de pasarela según el diagrama
-    setTimeout(() => {
-      const fechaActual = new Date().toLocaleDateString("es-CL", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
+const rutRegex = /^(\d{1,2}\.\d{3}\.\d{3}-[\dkK]|\d{7,8}-[\dkK])$/;
 
-      const numeroBoleta = "BOL-" + Math.floor(100000 + Math.random() * 900000);
+const checkoutSchema = yup.object({
+  nombre: yup.string().required('El nombre completo es obligatorio'),
+  rut: yup
+    .string()
+    .required('El R.U.T. es obligatorio')
+    .matches(rutRegex, 'Formato de RUT inválido (ej: 12.345.678-9)'),
+  email: yup
+    .string()
+    .required('El correo es obligatorio')
+    .test('dominio-valido', 'El correo debe terminar en @gmail.com o @duocuc.cl', (value) => {
+      if (!value) return false;
+      return value.endsWith('@gmail.com') || value.endsWith('@duocuc.cl');
+    }),
+  direccion: yup.string().required('La dirección de despacho es obligatoria'),
+  metodoPago: yup.string().required(),
 
-      // Cálculo de IVA (19% incluido en el total)
-      const neto = Math.round(total / 1.19);
-      const iva = total - neto;
+  // Validaciones condicionales
+  numTarjeta: yup.string().when('metodoPago', {
+    is: 'webpay',
+    then: (schema) => schema.required('Número de tarjeta obligatorio').min(19, 'Debe tener 16 dígitos'),
+    otherwise: (schema) => schema.notRequired()
+  }),
+  expiracion: yup.string().when('metodoPago', {
+    is: 'webpay',
+    then: (schema) => schema.required('Expiración obligatoria').matches(/^(0[1-9]|1[0-2])\/([0-9]{2})$/, 'Formato MM/AA'),
+    otherwise: (schema) => schema.notRequired()
+  }),
+  cvv: yup.string().when('metodoPago', {
+    is: 'webpay',
+    then: (schema) => schema.required('CVV obligatorio').matches(/^[0-9]{3,4}$/, '3 o 4 dígitos'),
+    otherwise: (schema) => schema.notRequired()
+  }),
+  comprobanteTransferencia: yup.string().when('metodoPago', {
+    is: 'transferencia',
+    then: (schema) => schema.required('El N.° de comprobante es obligatorio').min(5, 'Debe ingresar un comprobante válido'),
+    otherwise: (schema) => schema.notRequired()
+  })
+}).required();
 
-      const nuevaBoleta = {
-        numeroBoleta,
-        fecha: fechaActual,
-        cliente: { nombre, rut, email, direccion },
-        items: [...carrito],
-        subtotal,
-        descuento,
-        neto,
-        iva,
-        total,
-        puntosGanados: totalPuntosGanados,
-        metodoPago:
-          metodoPago === "tarjeta"
-            ? "Tarjeta de Crédito / Débito (Webpay)"
-            : "Transferencia Bancaria",
-      };
+// --- Funciones de formato automático ---
+const formatearRUT = (valor) => {
+  let limpio = valor.replace(/[^0-9kK]/g, '');
+  if (limpio.length === 0) return '';
+  let cuerpo = limpio.slice(0, -1);
+  let dv = limpio.slice(-1).toUpperCase();
+  if (limpio.length < 2) return limpio;
+  cuerpo = cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return `${cuerpo}-${dv}`;
+};
 
-      // 1. Guardar boleta para renderizar la vista final
-      setBoleta(nuevaBoleta);
+const formatearTarjeta = (valor) => {
+  let limpio = valor.replace(/\D/g, '').slice(0, 16);
+  return limpio.replace(/(\d{4})(?=\d)/g, '$1 ');
+};
 
-      // 2. Guardar en el historial del usuario si existe la función
-      if (usuario && registrarCompra) {
-        registrarCompra(nuevaBoleta);
+const formatearExpiracion = (valor) => {
+  let limpio = valor.replace(/\D/g, '').slice(0, 4);
+  if (limpio.length >= 3) {
+    return `${limpio.slice(0, 2)}/${limpio.slice(2)}`;
+  }
+  return limpio;
+};
+
+const obtenerSugerenciaEmail = (correo) => {
+  if (!correo || !correo.includes('@')) return '';
+  const [usuario, dominio] = correo.split('@');
+  if (!dominio) return '';
+
+  const dom = dominio.toLowerCase();
+
+  const typosGmail = ['gmial.com', 'gmai.com', 'gmal.com', 'gmeil.com', 'gmail.cl', 'gmail.co'];
+  if (typosGmail.includes(dom)) return `${usuario}@gmail.com`;
+
+  const typosDuoc = ['duoc.cl', 'duocuc.com', 'doucc.cl', 'duocu.cl', 'duocuc.co'];
+  if (typosDuoc.includes(dom)) return `${usuario}@duocuc.cl`;
+
+  return '';
+};
+
+export default function Checkout({ carrito: carritoProps }) {
+  // Obtención del carrito desde el Contexto (o respaldo desde Props)
+  const contexto = useContext(CarritoContext);
+  const carrito = contexto?.carrito || carritoProps || [];
+
+  const [metodoPago, setMetodoPago] = useState('webpay');
+  const [boletaGenerada, setBoletaGenerada] = useState(null);
+  const [sugerenciaEmail, setSugerenciaEmail] = useState('');
+
+  // Estados API mindicador.cl
+  const [valorDolar, setValorDolar] = useState(950);
+  const [cargandoDolar, setCargandoDolar] = useState(true);
+  const [esReferencial, setEsReferencial] = useState(false);
+
+  // --- CÁLCULOS DINÁMICOS DEL CARRITO ---
+  const montoTotalCLP = carrito.reduce((acc, item) => acc + item.precio * item.cantidad, 0);
+  const montoNetoCLP = Math.round(montoTotalCLP / 1.19);
+  const montoIvaCLP = montoTotalCLP - montoNetoCLP;
+  const montoUSD = valorDolar > 0 ? (montoTotalCLP / valorDolar).toFixed(2) : '0.00';
+
+  useEffect(() => {
+    const consultarDolar = async () => {
+      try {
+        const respuesta = await fetch('https://mindicador.cl/api/dolar');
+        if (respuesta.ok) {
+          const datos = await respuesta.json();
+          setValorDolar(datos.serie[0].valor);
+          setEsReferencial(false);
+        } else {
+          throw new Error('Error al conectar');
+        }
+      } catch (err) {
+        console.warn('No se pudo conectar a la API en vivo, usando valor referencial de respaldo.');
+        setValorDolar(950);
+        setEsReferencial(true);
+      } finally {
+        setCargandoDolar(false);
       }
-      if (usuario && agregarPuntos) {
-        agregarPuntos(totalPuntosGanados);
-      }
+    };
 
-      // 3. Vaciar el carrito
-      vaciarCarrito();
-      setProcesando(false);
-    }, 1500);
+    consultarDolar();
+  }, []);
+
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    trigger,
+    formState: { errors }
+  } = useForm({
+    resolver: yupResolver(checkoutSchema),
+    defaultValues: { metodoPago: 'webpay' }
+  });
+
+  const cambiarMetodoPago = (metodo) => {
+    setMetodoPago(metodo);
+    setValue('metodoPago', metodo);
+  };
+
+  const manejarCambioEmail = (e) => {
+    const valor = e.target.value;
+    const sugerencia = obtenerSugerenciaEmail(valor);
+    setSugerenciaEmail(sugerencia);
+  };
+
+  const aplicarSugerencia = () => {
+    setValue('email', sugerenciaEmail, { shouldValidate: true });
+    setSugerenciaEmail('');
+    trigger('email');
+  };
+
+  const onSubmit = (data) => {
+    setBoletaGenerada({
+      nroBoleta: Math.floor(100000 + Math.random() * 900000),
+      fecha: new Date().toLocaleString(),
+      cliente: data.nombre,
+      rut: data.rut,
+      email: data.email,
+      direccion: data.direccion,
+      metodoPago: data.metodoPago === 'webpay' ? 'Tarjeta Webpay' : 'Transferencia Bancaria',
+      comprobante: data.comprobanteTransferencia || 'N/A',
+      productos: carrito,
+      netoCLP: `$${montoNetoCLP.toLocaleString('es-CL')}`,
+      ivaCLP: `$${montoIvaCLP.toLocaleString('es-CL')}`,
+      totalCLP: `$${montoTotalCLP.toLocaleString('es-CL')}`,
+      montoUSD: `$${montoUSD} USD`
+    });
   };
 
   return (
-    <main className="container py-5 text-white">
-      {boleta ? (
-        /* --- VISTA DE BOLETA ELECTRÓNICA SIMULADA --- */
+    <div className="container my-4 text-white">
+      {boletaGenerada ? (
         <div className="row justify-content-center">
-          <div className="col-12 col-md-8 col-lg-7">
-            <div
-              className="card bg-white text-dark p-4 shadow-lg rounded-4"
-              id="boleta-imprimible"
-            >
-              {/* Encabezado Boleta */}
-              <div className="d-flex justify-content-between align-items-center border-bottom pb-3 mb-3">
-                <div>
-                  <h3 className="fw-bold m-0 text-primary">LEVEL-UP GAMER</h3>
-                  <small className="text-muted">Venta de Tecnología y Periféricos</small>
-                  <br />
-                  <small className="text-muted">R.U.T.: 76.543.210-K</small>
-                </div>
-                <div className="text-end border border-danger p-2 rounded text-danger fw-bold small">
-                  R.U.T.: 76.543.210-K <br />
-                  BOLETA ELECTRÓNICA <br />
-                  N° {boleta.numeroBoleta}
+          <div className="col-md-8">
+            <div className="p-4 rounded bg-dark border border-success shadow">
+              <div className="text-center mb-4">
+                <span className="fs-1">🧾</span>
+                <h3 className="text-success mt-2">¡Pago Realizado con Éxito!</h3>
+                <p className="text-light">Boleta Electrónica N.° #{boletaGenerada.nroBoleta}</p>
+              </div>
+
+              <div className="border border-secondary p-3 rounded bg-black bg-opacity-25 mb-4">
+                <div className="row g-2 text-light">
+                  <div className="col-6"><strong>Fecha:</strong> {boletaGenerada.fecha}</div>
+                  <div className="col-6"><strong>Cliente:</strong> {boletaGenerada.cliente}</div>
+                  <div className="col-6"><strong>R.U.T.:</strong> {boletaGenerada.rut}</div>
+                  <div className="col-6"><strong>Correo:</strong> {boletaGenerada.email}</div>
+                  <div className="col-12"><strong>Dirección:</strong> {boletaGenerada.direccion}</div>
+                  <div className="col-6"><strong>Método de Pago:</strong> {boletaGenerada.metodoPago}</div>
+                  {boletaGenerada.comprobante !== 'N/A' && (
+                    <div className="col-6"><strong>N.° Comprobante:</strong> {boletaGenerada.comprobante}</div>
+                  )}
                 </div>
               </div>
 
-              {/* Datos Cliente */}
-              <div className="mb-3 small">
-                <p className="mb-1"><strong>Fecha:</strong> {boleta.fecha}</p>
-                <p className="mb-1"><strong>Señor(a):</strong> {boleta.cliente.nombre}</p>
-                <p className="mb-1"><strong>R.U.T.:</strong> {boleta.cliente.rut || "N/A"}</p>
-                <p className="mb-1"><strong>Email:</strong> {boleta.cliente.email}</p>
-                <p className="mb-1"><strong>Dirección:</strong> {boleta.cliente.direccion}</p>
-                <p className="mb-1"><strong>Forma de Pago:</strong> {boleta.metodoPago}</p>
-              </div>
-
-              {/* Detalle Productos */}
-              <table className="table table-sm text-dark small mb-3">
-                <thead className="table-light">
-                  <tr>
-                    <th>Cant.</th>
-                    <th>Producto</th>
-                    <th className="text-end">P. Unitario</th>
-                    <th className="text-end">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {boleta.items.map((prod) => (
-                    <tr key={prod.id}>
-                      <td>{prod.cantidad}</td>
-                      <td>{prod.nombre}</td>
-                      <td className="text-end">${prod.precio.toLocaleString("es-CL")}</td>
-                      <td className="text-end">
-                        ${(prod.precio * prod.cantidad).toLocaleString("es-CL")}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              {/* Totales */}
-              <div className="row small border-top pt-2">
-                <div className="col-7">
-                  {boleta.descuento > 0 && (
-                    <p className="text-success fw-bold mb-1">
-                      🎓 Descuento Duoc UC (20%) Aplicado
-                    </p>
-                  )}
-                  {boleta.puntosGanados > 0 && (
-                    <p className="text-primary mb-1">
-                      ⭐ Puntos acumulados: +{boleta.puntosGanados} pts
-                    </p>
-                  )}
+              <h5 className="border-bottom border-secondary pb-2 mb-3">Detalle de Compra</h5>
+              {boletaGenerada.productos.map((prod, index) => (
+                <div key={index} className="d-flex justify-content-between mb-2">
+                  <span>{prod.cantidad}x {prod.nombre}</span>
+                  <span>${(prod.precio * prod.cantidad).toLocaleString('es-CL')} CLP</span>
                 </div>
-                <div className="col-5 text-end">
-                  <p className="mb-1">Subtotal: ${boleta.subtotal.toLocaleString("es-CL")}</p>
-                  {boleta.descuento > 0 && (
-                    <p className="mb-1 text-danger">
-                      Descuento: -${boleta.descuento.toLocaleString("es-CL")}
-                    </p>
-                  )}
-                  <p className="mb-1 text-muted">
-                    Monto Neto: ${boleta.neto.toLocaleString("es-CL")}
-                  </p>
-                  <p className="mb-1 text-muted">
-                    I.V.A. (19%): ${boleta.iva.toLocaleString("es-CL")}
-                  </p>
-                  <h5 className="fw-bold mt-2 border-top pt-1">
-                    TOTAL: ${boleta.total.toLocaleString("es-CL")}
-                  </h5>
+              ))}
+
+              {/* Desglose de IVA */}
+              <div className="border-top border-secondary pt-3 mt-3">
+                <div className="d-flex justify-content-between text-muted small mb-1">
+                  <span>Monto Neto:</span>
+                  <span>{boletaGenerada.netoCLP} CLP</span>
+                </div>
+                <div className="d-flex justify-content-between text-muted small mb-2">
+                  <span>IVA (19%):</span>
+                  <span>{boletaGenerada.ivaCLP} CLP</span>
+                </div>
+                
+                <hr className="border-secondary" />
+                
+                <div className="d-flex justify-content-between fs-5 fw-bold text-success">
+                  <span>Total Pagado:</span>
+                  <div className="text-end">
+                    <div>{boletaGenerada.totalCLP} CLP</div>
+                    <div className="fs-6 text-info font-normal fw-normal">
+                      (Equivalente Informativo: {boletaGenerada.montoUSD})
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* Botones */}
-              <div className="d-print-none d-flex justify-content-between mt-4 pt-3 border-top">
-                <button
-                  onClick={() => window.print()}
-                  className="btn btn-outline-dark fw-bold"
-                >
-                  🖨️ Imprimir Boleta
+              <div className="d-flex gap-2 mt-4">
+                <button className="btn btn-outline-light w-50" onClick={() => window.print()}>
+                  🖨️️ Imprimir Boleta
                 </button>
-                <Link to="/catalogo" className="btn btn-primary fw-bold">
+                <button className="btn btn-primary w-50" onClick={() => setBoletaGenerada(null)}>
                   Volver a la Tienda
-                </Link>
+                </button>
               </div>
             </div>
           </div>
         </div>
       ) : (
-        /* --- FORMULARIO DE CHECKOUT --- */
         <div className="row g-4">
-          <div className="col-12 col-lg-7">
-            <div
-              className="card text-white border-0 p-4 shadow-lg rounded-4"
-              style={{ backgroundColor: "#111827", border: "1px solid #1f2937" }}
-            >
-              <h4 className="fw-bold mb-4">💳 Datos de Facturación y Pago</h4>
-
-              <form onSubmit={handleProcesarCompra}>
-                <div className="row g-3 mb-3">
-                  <div className="col-12 col-md-6">
-                    <label className="form-label small text-secondary">
-                      Nombre Completo
-                    </label>
+          <div className="col-md-7">
+            <div className="p-4 rounded bg-dark border border-secondary shadow">
+              <h4 className="mb-4">💳 Datos de Facturación y Pago</h4>
+              
+              <form onSubmit={handleSubmit(onSubmit)}>
+                <div className="row g-3">
+                  {/* Nombre Completo */}
+                  <div className="col-md-6">
+                    <label className="form-label text-light">Nombre Completo</label>
                     <input
                       type="text"
-                      className="form-control text-white border-secondary shadow-none"
-                      style={{ backgroundColor: "#1f2937" }}
-                      value={nombre}
-                      onChange={(e) => setNombre(e.target.value)}
-                      required
+                      placeholder="Ej. Juan Pérez"
+                      className={`form-control bg-dark text-white border-secondary ${errors.nombre ? 'is-invalid' : ''}`}
+                      {...register('nombre')}
                     />
+                    {errors.nombre && <div className="invalid-feedback">{errors.nombre.message}</div>}
                   </div>
-                  <div className="col-12 col-md-6">
-                    <label className="form-label small text-secondary">R.U.T.</label>
+
+                  {/* R.U.T. */}
+                  <div className="col-md-6">
+                    <label className="form-label text-light">R.U.T.</label>
                     <input
                       type="text"
-                      className="form-control text-white border-secondary shadow-none"
-                      style={{ backgroundColor: "#1f2937" }}
+                      maxLength="12"
                       placeholder="12.345.678-9"
-                      value={rut}
-                      onChange={(e) => setRut(e.target.value)}
-                      required
+                      className={`form-control bg-dark text-white border-secondary ${errors.rut ? 'is-invalid' : ''}`}
+                      {...register('rut', {
+                        onChange: (e) => {
+                          e.target.value = formatearRUT(e.target.value);
+                          setValue('rut', e.target.value, { shouldValidate: true });
+                        }
+                      })}
                     />
+                    {errors.rut && <div className="invalid-feedback">{errors.rut.message}</div>}
+                  </div>
+
+                  {/* Correo Electrónico */}
+                  <div className="col-12">
+                    <label className="form-label text-light">Correo Electrónico (@gmail.com o @duocuc.cl)</label>
+                    <input
+                      type="email"
+                      placeholder="ejemplo@gmail.com o ejemplo@duocuc.cl"
+                      className={`form-control bg-dark text-white border-secondary ${errors.email ? 'is-invalid' : ''}`}
+                      {...register('email', {
+                        onChange: manejarCambioEmail
+                      })}
+                    />
+                    {errors.email && <div className="invalid-feedback">{errors.email.message}</div>}
+
+                    {sugerenciaEmail && (
+                      <div className="mt-2 text-warning small">
+                        💡 ¿Quisiste decir{' '}
+                        <button
+                          type="button"
+                          className="btn btn-link p-0 text-warning text-decoration-underline fw-bold align-baseline"
+                          onClick={aplicarSugerencia}
+                        >
+                          {sugerenciaEmail}
+                        </button>
+                        ? (Haz clic para corregir)
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Dirección */}
+                  <div className="col-12">
+                    <label className="form-label text-light">Dirección de Despacho</label>
+                    <input
+                      type="text"
+                      placeholder="Av. Concha y Toro 1340, Puente Alto"
+                      className={`form-control bg-dark text-white border-secondary ${errors.direccion ? 'is-invalid' : ''}`}
+                      {...register('direccion')}
+                    />
+                    {errors.direccion && <div className="invalid-feedback">{errors.direccion.message}</div>}
+                  </div>
+
+                  {/* Métodos de Pago */}
+                  <div className="col-12 my-3">
+                    <label className="form-label text-light d-block">Método de Pago</label>
+                    <div className="btn-group w-100" role="group">
+                      <button
+                        type="button"
+                        className={`btn ${metodoPago === 'webpay' ? 'btn-primary' : 'btn-outline-secondary text-white'}`}
+                        onClick={() => cambiarMetodoPago('webpay')}
+                      >
+                        💳 Tarjeta Webpay
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn ${metodoPago === 'transferencia' ? 'btn-primary' : 'btn-outline-secondary text-white'}`}
+                        onClick={() => cambiarMetodoPago('transferencia')}
+                      >
+                        🏦 Transferencia
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Tarjeta Webpay */}
+                  {metodoPago === 'webpay' && (
+                    <div className="p-3 border border-primary rounded bg-black bg-opacity-25 my-2">
+                      <h6 className="text-primary mb-3">Ingresa los Datos de tu Tarjeta</h6>
+                      <div className="row g-2">
+                        <div className="col-12 mb-2">
+                          <label className="form-label text-light small">Número de Tarjeta (16 dígitos)</label>
+                          <input
+                            type="text"
+                            maxLength="19"
+                            placeholder="1234 5678 9012 3456"
+                            className={`form-control bg-dark text-white border-secondary ${errors.numTarjeta ? 'is-invalid' : ''}`}
+                            {...register('numTarjeta', {
+                              onChange: (e) => {
+                                e.target.value = formatearTarjeta(e.target.value);
+                                setValue('numTarjeta', e.target.value, { shouldValidate: true });
+                              }
+                            })}
+                          />
+                          {errors.numTarjeta && <div className="invalid-feedback">{errors.numTarjeta.message}</div>}
+                        </div>
+                        <div className="col-6">
+                          <label className="form-label text-light small">Vencimiento (MM/AA)</label>
+                          <input
+                            type="text"
+                            maxLength="5"
+                            placeholder="08/28"
+                            className={`form-control bg-dark text-white border-secondary ${errors.expiracion ? 'is-invalid' : ''}`}
+                            {...register('expiracion', {
+                              onChange: (e) => {
+                                e.target.value = formatearExpiracion(e.target.value);
+                                setValue('expiracion', e.target.value, { shouldValidate: true });
+                              }
+                            })}
+                          />
+                          {errors.expiracion && <div className="invalid-feedback">{errors.expiracion.message}</div>}
+                        </div>
+                        <div className="col-6">
+                          <label className="form-label text-light small">CVV</label>
+                          <input
+                            type="password"
+                            maxLength="4"
+                            placeholder="123"
+                            className={`form-control bg-dark text-white border-secondary ${errors.cvv ? 'is-invalid' : ''}`}
+                            {...register('cvv')}
+                          />
+                          {errors.cvv && <div className="invalid-feedback">{errors.cvv.message}</div>}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Transferencia */}
+                  {metodoPago === 'transferencia' && (
+                    <div className="p-3 border border-info rounded bg-black bg-opacity-25 my-2">
+                      <h6 className="text-info mb-2">Datos para realizar la transferencia:</h6>
+                      <ul className="small text-light mb-3 ps-3">
+                        <li><strong>Banco:</strong> Banco Estado / Banco de Chile</li>
+                        <li><strong>Tipo de Cuenta:</strong> Cuenta Corriente</li>
+                        <li><strong>N.° Cuenta:</strong> 123456789</li>
+                        <li><strong>RUT Empresa:</strong> 76.543.210-K</li>
+                        <li><strong>Correo Confirmación:</strong> pagos@levelupgamer.cl</li>
+                      </ul>
+                      
+                      <div className="col-12">
+                        <label className="form-label text-light small">N.° de Comprobante / Transacción</label>
+                        <input
+                          type="text"
+                          placeholder="Ej. 987654321"
+                          className={`form-control bg-dark text-white border-secondary ${errors.comprobanteTransferencia ? 'is-invalid' : ''}`}
+                          {...register('comprobanteTransferencia')}
+                        />
+                        {errors.comprobanteTransferencia && (
+                          <div className="invalid-feedback">{errors.comprobanteTransferencia.message}</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Botón dinámico con monto del carrito */}
+                  <div className="col-12 mt-4">
+                    <button type="submit" className="btn btn-primary w-100 py-2 fw-bold" disabled={carrito.length === 0}>
+                      PAGAR ${montoTotalCLP.toLocaleString('es-CL')} CLP
+                    </button>
                   </div>
                 </div>
-
-                <div className="mb-3">
-                  <label className="form-label small text-secondary">
-                    Correo Electrónico
-                  </label>
-                  <input
-                    type="email"
-                    className="form-control text-white border-secondary shadow-none"
-                    style={{ backgroundColor: "#1f2937" }}
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="mb-4">
-                  <label className="form-label small text-secondary">
-                    Dirección de Despacho
-                  </label>
-                  <input
-                    type="text"
-                    className="form-control text-white border-secondary shadow-none"
-                    style={{ backgroundColor: "#1f2937" }}
-                    placeholder="Av. Concha y Toro 1340, Puente Alto"
-                    value={direccion}
-                    onChange={(e) => setDireccion(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <h6 className="text-secondary fw-bold mb-3">Método de Pago</h6>
-                <div className="d-flex gap-2 mb-4">
-                  <button
-                    type="button"
-                    className={`btn btn-sm flex-fill ${
-                      metodoPago === "tarjeta" ? "btn-primary" : "btn-outline-secondary"
-                    }`}
-                    onClick={() => setMetodoPago("tarjeta")}
-                  >
-                    💳 Tarjeta Webpay
-                  </button>
-                  <button
-                    type="button"
-                    className={`btn btn-sm flex-fill ${
-                      metodoPago === "transferencia" ? "btn-primary" : "btn-outline-secondary"
-                    }`}
-                    onClick={() => setMetodoPago("transferencia")}
-                  >
-                    🏦 Transferencia
-                  </button>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={procesando}
-                  className="btn btn-primary w-100 fw-bold py-2 text-uppercase"
-                >
-                  {procesando
-                    ? "⏳ Generando Boleta y Procesando..."
-                    : `Pagar $${total.toLocaleString("es-CL")}`}
-                </button>
               </form>
             </div>
           </div>
 
-          {/* Resumen Lateral */}
-          <div className="col-12 col-lg-5">
-            <div
-              className="card text-white border-0 p-4 shadow-lg rounded-4"
-              style={{ backgroundColor: "#111827", border: "1px solid #1f2937" }}
-            >
-              <h5 className="fw-bold mb-3">Resumen de la Orden</h5>
-              <ul className="list-group list-group-flush mb-3">
-                {carrito.map((item) => (
-                  <li
-                    key={item.id}
-                    className="list-group-item bg-transparent text-white d-flex justify-content-between px-0 border-secondary small"
-                  >
-                    <span>
-                      {item.cantidad}x {item.nombre}
-                    </span>
-                    <span className="fw-bold">
-                      ${(item.precio * item.cantidad).toLocaleString("es-CL")}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+          {/* Resumen de la orden dinámico con Indicador Dólar e IVA */}
+          <div className="col-md-5">
+            <div className="p-4 rounded bg-dark border border-secondary shadow">
+              <h4>Resumen de la Orden</h4>
 
-              <div className="border-top border-secondary pt-2 small">
-                {esEstudianteDuoc && (
-                  <div className="d-flex justify-content-between text-success fw-bold mb-1">
-                    <span>Descuento Duoc UC (20%):</span>
-                    <span>-${descuento.toLocaleString("es-CL")}</span>
-                  </div>
+              {/* Mapeo dinámico de productos del carrito */}
+              <div className="my-3">
+                {carrito.length === 0 ? (
+                  <p className="text-muted small">No hay productos en el carrito.</p>
+                ) : (
+                  carrito.map((item, index) => (
+                    <div key={index} className="d-flex justify-content-between mb-2">
+                      <span>{item.cantidad}x {item.nombre}</span>
+                      <span className="fw-bold">${(item.precio * item.cantidad).toLocaleString('es-CL')} CLP</span>
+                    </div>
+                  ))
                 )}
-                <div className="d-flex justify-content-between fs-5 fw-bold mt-2 pt-2 border-top border-secondary">
-                  <span>Total Final:</span>
-                  <span className="text-primary">${total.toLocaleString("es-CL")}</span>
+              </div>
+
+              <IndicadorDolar dolar={valorDolar} cargando={cargandoDolar} esReferencial={esReferencial} />
+
+              <div className="border-top border-secondary pt-2">
+                <div className="d-flex justify-content-between text-muted small mb-1">
+                  <span>Monto Neto:</span>
+                  <span>${montoNetoCLP.toLocaleString('es-CL')} CLP</span>
+                </div>
+                <div className="d-flex justify-content-between text-muted small mb-2">
+                  <span>IVA (19%):</span>
+                  <span>${montoIvaCLP.toLocaleString('es-CL')} CLP</span>
+                </div>
+              </div>
+
+              <hr className="border-secondary my-2" />
+              
+              <div className="d-flex justify-content-between fs-5 text-primary fw-bold">
+                <span>Total Final:</span>
+                <div className="text-end">
+                  <div>${montoTotalCLP.toLocaleString('es-CL')} CLP</div>
+                  <div className="fs-6 text-success fw-normal">
+                    (Equivalente en Dólares: USD ${montoUSD})
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
       )}
-    </main>
+    </div>
   );
 }

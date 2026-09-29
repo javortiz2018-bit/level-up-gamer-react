@@ -1,8 +1,10 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useAuth } from "./AuthContext";
 
-const CarritoContext = createContext();
+// Exportamos el contexto para permitir importación nombrada { CarritoContext }
+export const CarritoContext = createContext();
 
+// Hook personalizado para consumir el carrito fácilmente
 export const useCarrito = () => {
   const context = useContext(CarritoContext);
   if (!context) {
@@ -12,19 +14,30 @@ export const useCarrito = () => {
 };
 
 export const CarritoProvider = ({ children }) => {
-  const { usuario } = useAuth?.() || {}; // Obtener sesión para verificar descuento Duoc
+  // Obtención segura del usuario
+  const auth = useAuth();
+  const usuario = auth?.usuario;
 
-  // Cargar carrito desde localStorage
+  // Cargar carrito desde localStorage de manera segura con try/catch
   const [carrito, setCarrito] = useState(() => {
-    const guardado = localStorage.getItem("carrito_gamer");
-    return guardado ? JSON.parse(guardado) : [];
+    try {
+      const guardado = localStorage.getItem("carrito_gamer");
+      return guardado ? JSON.parse(guardado) : [];
+    } catch (error) {
+      console.error("Error al leer el carrito desde localStorage:", error);
+      return [];
+    }
   });
 
   const [mostrarModal, setMostrarModal] = useState(false);
 
   // Guardar en localStorage ante cualquier cambio
   useEffect(() => {
-    localStorage.setItem("carrito_gamer", JSON.stringify(carrito));
+    try {
+      localStorage.setItem("carrito_gamer", JSON.stringify(carrito));
+    } catch (error) {
+      console.error("Error al guardar el carrito en localStorage:", error);
+    }
   }, [carrito]);
 
   // Agregar producto al carrito
@@ -83,7 +96,9 @@ export const CarritoProvider = ({ children }) => {
   );
 
   // Verificar si aplica el 20% OFF por ser de Duoc UC
-  const esEstudianteDuoc = usuario?.email?.toLowerCase().endsWith("@duocuc.cl") || usuario?.esDuoc;
+  const esEstudianteDuoc =
+    Boolean(usuario?.email?.toLowerCase().endsWith("@duocuc.cl")) || Boolean(usuario?.esDuoc);
+
   const porcentajeDescuento = esEstudianteDuoc ? 0.2 : 0;
   const montoDescuento = Math.round(subtotal * porcentajeDescuento);
   const totalFinal = subtotal - montoDescuento;
@@ -113,3 +128,6 @@ export const CarritoProvider = ({ children }) => {
     </CarritoContext.Provider>
   );
 };
+
+// Exportación por defecto para mantener compatibilidad total
+export default CarritoContext;

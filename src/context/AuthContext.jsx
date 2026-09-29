@@ -1,21 +1,31 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 
-const AuthContext = createContext();
+const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-  // Cargar usuarios guardados o inicializar con uno por defecto si está vacío
+  // 1. Cargar usuarios guardados
   const [usuariosBD, setUsuariosBD] = useState(() => {
-    const guardados = localStorage.getItem("usuarios");
-    return guardados ? JSON.parse(guardados) : [];
+    try {
+      const guardados = localStorage.getItem("usuarios");
+      return guardados ? JSON.parse(guardados) : [];
+    } catch (error) {
+      console.error("Error al leer 'usuarios' de localStorage:", error);
+      return [];
+    }
   });
 
-  // Cargar la sesión actual
+  // 2. Cargar la sesión actual
   const [usuario, setUsuario] = useState(() => {
-    const sesion = localStorage.getItem("usuarioSesion");
-    return sesion ? JSON.parse(sesion) : null;
+    try {
+      const sesion = localStorage.getItem("usuarioSesion");
+      return sesion ? JSON.parse(sesion) : null;
+    } catch (error) {
+      console.error("Error al leer 'usuarioSesion' de localStorage:", error);
+      return null;
+    }
   });
 
-  // Estado para controlar el modal de confirmación de salida
+  // Estado para controlar modal si decides usarlo en el futuro
   const [mostrarModalSalir, setMostrarModalSalir] = useState(false);
 
   // Sincronizar Base de Datos local
@@ -23,7 +33,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem("usuarios", JSON.stringify(usuariosBD));
   }, [usuariosBD]);
 
-  // Sincronizar Sesión activa
+  // Sincronizar Sesión activa con localStorage
   useEffect(() => {
     if (usuario) {
       localStorage.setItem("usuarioSesion", JSON.stringify(usuario));
@@ -34,23 +44,25 @@ export const AuthProvider = ({ children }) => {
 
   // Registrar usuario
   const registrarUsuario = ({ nombre, email, edad, password }) => {
-    const existe = usuariosBD.find(
-      (u) => u.email.toLowerCase() === email.toLowerCase()
+    const emailLimpio = email.trim().toLowerCase();
+
+    const existe = usuariosBD.some(
+      (u) => u.email.toLowerCase() === emailLimpio
     );
 
     if (existe) {
       return { ok: false, msj: "El correo electrónico ya está registrado." };
     }
 
-    const esDuoc = email.toLowerCase().endsWith("@duocuc.cl");
+    const esDuoc = emailLimpio.endsWith("@duocuc.cl") || emailLimpio.endsWith("@profesor.duoc.cl");
 
     const nuevoUsuario = {
-      nombre,
-      email,
+      nombre: nombre.trim(),
+      email: emailLimpio,
       edad: Number(edad),
       password,
       puntos: 0,
-      esDuoc, // Permite identificar si aplica 20% OFF
+      esDuoc,
     };
 
     setUsuariosBD((prev) => [...prev, nuevoUsuario]);
@@ -59,8 +71,10 @@ export const AuthProvider = ({ children }) => {
 
   // Iniciar sesión
   const iniciarSesion = (email, password) => {
+    const emailLimpio = email.trim().toLowerCase();
+
     const usuarioValido = usuariosBD.find(
-      (u) => u.email.toLowerCase() === email.toLowerCase() && u.password === password
+      (u) => u.email.toLowerCase() === emailLimpio && u.password === password
     );
 
     if (usuarioValido) {
@@ -71,40 +85,37 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Solicitar cierre de sesión (Abre Modal)
-  const solicitarCerrarSesion = () => {
-    setMostrarModalSalir(true);
-  };
-
-  // Confirmar salida
-  const confirmarCerrarSesion = () => {
+  // CERRAR SESIÓN DIRECTO (Limpia el estado y elimina de localStorage)
+  const cerrarSesion = () => {
     setUsuario(null);
+    localStorage.removeItem("usuarioSesion");
     setMostrarModalSalir(false);
   };
 
-  // Cancelar salida
-  const cancelarCerrarSesion = () => {
-    setMostrarModalSalir(false);
-  };
+  // Modal (Opcional, por si prefieres pedir confirmación)
+  const solicitarCerrarSesion = () => setMostrarModalSalir(true);
+  const cancelarCerrarSesion = () => setMostrarModalSalir(false);
 
-  // Sumar puntos y actualizar sincronizadamente la BD
+  // Sumar puntos y actualizar sincronizadamente
   const agregarPuntos = (cantidadPuntos) => {
     if (!usuario) return;
 
-    const nuevosPuntos = (usuario.puntos || 0) + cantidadPuntos;
-    const usuarioActualizado = { ...usuario, puntos: nuevosPuntos };
+    setUsuario((prevUsuario) => {
+      if (!prevUsuario) return null;
+      
+      const nuevosPuntos = (prevUsuario.puntos || 0) + cantidadPuntos;
+      const usuarioActualizado = { ...prevUsuario, puntos: nuevosPuntos };
 
-    // Actualizar sesión actual
-    setUsuario(usuarioActualizado);
+      setUsuariosBD((prevBD) =>
+        prevBD.map((u) =>
+          u.email.toLowerCase() === usuarioActualizado.email.toLowerCase()
+            ? usuarioActualizado
+            : u
+        )
+      );
 
-    // Actualizar base de datos general
-    setUsuariosBD((prev) =>
-      prev.map((u) =>
-        u.email.toLowerCase() === usuario.email.toLowerCase()
-          ? usuarioActualizado
-          : u
-      )
-    );
+      return usuarioActualizado;
+    });
   };
 
   return (
@@ -114,8 +125,9 @@ export const AuthProvider = ({ children }) => {
         usuariosBD,
         registrarUsuario,
         iniciarSesion,
-        cerrarSesion: solicitarCerrarSesion,
-        confirmarCerrarSesion,
+        cerrarSesion, // Ahora cierra sesión directamente
+        solicitarCerrarSesion,
+        confirmarCerrarSesion: cerrarSesion,
         cancelarCerrarSesion,
         mostrarModalSalir,
         agregarPuntos,
@@ -127,4 +139,10 @@ export const AuthProvider = ({ children }) => {
   );
 };
 
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error("useAuth debe ser utilizado dentro de un AuthProvider");
+  }
+  return context;
+};

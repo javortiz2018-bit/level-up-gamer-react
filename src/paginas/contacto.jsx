@@ -64,10 +64,6 @@ export default function Contacto() {
                   <p className="small text-secondary mb-0">Lunes a Viernes: 09:00 - 18:00 hrs</p>
                 </div>
               </div>
-
-              <div className="alert alert-danger bg-danger/10 border-danger text-danger text-center mb-0 mt-3 small">
-                ⭐ Recuerda que si usas correo <strong>@duocuc.cl</strong> obtienes 20% de descuento automático.
-              </div>
             </div>
           </div>
         </div>
