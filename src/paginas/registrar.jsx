@@ -9,13 +9,15 @@ export default function Registrar() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
+  const [exito, setExito] = useState(""); // 1. Estado para mensaje de éxito
 
-  const { registrarUsuario, iniciarSesion } = useAuth();
+  const { registrarUsuario } = useAuth(); // Ya no necesitamos iniciarSesion aquí
   const navigate = useNavigate();
 
   const handleSubmit = (e) => {
     e.preventDefault();
     setError("");
+    setExito("");
 
     if (!nombre || !email || !password || !confirmPassword) {
       setError("Por favor completa todos los campos requeridos.");
@@ -41,9 +43,13 @@ export default function Registrar() {
     });
 
     if (respuesta.ok) {
-      // Inicia sesión automáticamente tras el registro
-      iniciarSesion(email, password);
-      navigate("/");
+      // 2. Muestra mensaje de éxito
+      setExito(respuesta.msj);
+
+      // 3. Espera 1.5 segundos y redirige a la vista /login
+      setTimeout(() => {
+        navigate("/login");
+      }, 1500);
     } else {
       setError(respuesta.msj);
     }
@@ -84,6 +90,13 @@ export default function Registrar() {
               {error && (
                 <div className="alert alert-danger small py-2 mb-3" role="alert">
                   {error}
+                </div>
+              )}
+
+              {/* Mensaje de Éxito */}
+              {exito && (
+                <div className="alert alert-success small py-2 mb-3" role="alert">
+                  {exito}
                 </div>
               )}
 
@@ -185,4 +198,4 @@ export default function Registrar() {
       </div>
     </main>
   );
-}   
+}

@@ -19,11 +19,14 @@ export default function Login() {
     }
 
     // Lógica de inicio de sesión
-    const exito = iniciarSesion(email, password);
-    if (exito) {
+    const resultado = iniciarSesion(email, password);
+
+    // Verificamos la propiedad .ok del resultado
+    if (resultado.ok) {
       navigate("/");
     } else {
-      setError("Credenciales incorrectas. Revisa tu correo o contraseña.");
+      // Guardamos el mensaje específico recibido desde AuthContext
+      setError(resultado.msj);
     }
   };
 

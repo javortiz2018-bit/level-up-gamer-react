@@ -3,7 +3,7 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-  // 1. Cargar usuarios guardados
+  // 1. Cargar usuarios guardados en localStorage
   const [usuariosBD, setUsuariosBD] = useState(() => {
     try {
       const guardados = localStorage.getItem("usuarios");
@@ -14,7 +14,7 @@ export const AuthProvider = ({ children }) => {
     }
   });
 
-  // 2. Cargar la sesión actual
+  // 2. Cargar la sesión actual desde localStorage
   const [usuario, setUsuario] = useState(() => {
     try {
       const sesion = localStorage.getItem("usuarioSesion");
@@ -25,10 +25,9 @@ export const AuthProvider = ({ children }) => {
     }
   });
 
-  // Estado para controlar modal si decides usarlo en el futuro
   const [mostrarModalSalir, setMostrarModalSalir] = useState(false);
 
-  // Sincronizar Base de Datos local
+  // Sincronizar Base de Datos local con localStorage
   useEffect(() => {
     localStorage.setItem("usuarios", JSON.stringify(usuariosBD));
   }, [usuariosBD]);
@@ -42,9 +41,17 @@ export const AuthProvider = ({ children }) => {
     }
   }, [usuario]);
 
-  // Registrar usuario
+  // Registrar usuario (Incluye regla de edad mínima de 18 años)
   const registrarUsuario = ({ nombre, email, edad, password }) => {
     const emailLimpio = email.trim().toLowerCase();
+
+    // Requerimiento: Registro solo para mayores de 18 años
+    if (Number(edad) < 18) {
+      return {
+        ok: false,
+        msj: "Debes ser mayor de 18 años para registrarte en Level-Up Gamer.",
+      };
+    }
 
     const existe = usuariosBD.some(
       (u) => u.email.toLowerCase() === emailLimpio
@@ -54,7 +61,11 @@ export const AuthProvider = ({ children }) => {
       return { ok: false, msj: "El correo electrónico ya está registrado." };
     }
 
-    const esDuoc = emailLimpio.endsWith("@duocuc.cl") || emailLimpio.endsWith("@profesor.duoc.cl");
+    // Requerimiento: Identificación de correos Duoc para el 20% OFF de por vida
+    const esDuoc =
+      emailLimpio.endsWith("@duocuc.cl") ||
+      emailLimpio.endsWith("@profesor.duoc.cl") ||
+      emailLimpio.endsWith("@duoc.cl");
 
     const nuevoUsuario = {
       nombre: nombre.trim(),
@@ -66,46 +77,67 @@ export const AuthProvider = ({ children }) => {
     };
 
     setUsuariosBD((prev) => [...prev, nuevoUsuario]);
-    return { ok: true, msj: "¡Cuenta creada con éxito!" };
+    return {
+      ok: true,
+      msj: "¡Cuenta creada con éxito! Redirigiendo a Iniciar Sesión...",
+    };
   };
 
   // Iniciar sesión
   const iniciarSesion = (email, password) => {
     const emailLimpio = email.trim().toLowerCase();
 
-    const usuarioValido = usuariosBD.find(
-      (u) => u.email.toLowerCase() === emailLimpio && u.password === password
+    const usuarioExiste = usuariosBD.find(
+      (u) => u.email.toLowerCase() === emailLimpio
     );
 
-    if (usuarioValido) {
-      setUsuario(usuarioValido);
-      return { ok: true, msj: `¡Bienvenido ${usuarioValido.nombre}!` };
-    } else {
-      return { ok: false, msj: "Correo o contraseña incorrectos." };
+    if (!usuarioExiste) {
+      return {
+        ok: false,
+        msj: "El correo electrónico no está registrado. Por favor regístrate.",
+      };
     }
+
+    if (usuarioExiste.password !== password) {
+      return {
+        ok: false,
+        msj: "La contraseña es incorrecta.",
+      };
+    }
+
+    setUsuario(usuarioExiste);
+    return { ok: true, msj: `¡Bienvenido ${usuarioExiste.nombre}!` };
   };
 
-  // CERRAR SESIÓN DIRECTO (Limpia el estado y elimina de localStorage)
+  // Cerrar sesión
   const cerrarSesion = () => {
     setUsuario(null);
     localStorage.removeItem("usuarioSesion");
     setMostrarModalSalir(false);
   };
 
-  // Modal (Opcional, por si prefieres pedir confirmación)
   const solicitarCerrarSesion = () => setMostrarModalSalir(true);
   const cancelarCerrarSesion = () => setMostrarModalSalir(false);
 
-  // Sumar puntos y actualizar sincronizadamente
+  // Sumar puntos LevelUp (Habilitado para TODOS los usuarios autenticados)[cite: 4]
   const agregarPuntos = (cantidadPuntos) => {
-    if (!usuario) return;
+    if (!usuario) {
+      return { ok: false, msj: "Debes iniciar sesión para acumular puntos." };
+    }
+
+    const puntosASumar = Number(cantidadPuntos) || 0;
+    if (puntosASumar <= 0) {
+      return { ok: false, msj: "La cantidad de puntos debe ser mayor a 0." };
+    }
 
     setUsuario((prevUsuario) => {
       if (!prevUsuario) return null;
-      
-      const nuevosPuntos = (prevUsuario.puntos || 0) + cantidadPuntos;
+
+      const puntosActuales = Number(prevUsuario.puntos) || 0;
+      const nuevosPuntos = puntosActuales + puntosASumar;
       const usuarioActualizado = { ...prevUsuario, puntos: nuevosPuntos };
 
+      // Sincronizar actualización en la lista general de usuarios
       setUsuariosBD((prevBD) =>
         prevBD.map((u) =>
           u.email.toLowerCase() === usuarioActualizado.email.toLowerCase()
@@ -116,6 +148,8 @@ export const AuthProvider = ({ children }) => {
 
       return usuarioActualizado;
     });
+
+    return { ok: true, msj: `¡Has acumulado ${puntosASumar} puntos LevelUp!` };
   };
 
   return (
@@ -125,7 +159,7 @@ export const AuthProvider = ({ children }) => {
         usuariosBD,
         registrarUsuario,
         iniciarSesion,
-        cerrarSesion, // Ahora cierra sesión directamente
+        cerrarSesion,
         solicitarCerrarSesion,
         confirmarCerrarSesion: cerrarSesion,
         cancelarCerrarSesion,

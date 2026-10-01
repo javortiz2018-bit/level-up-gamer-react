@@ -13,12 +13,23 @@ export const useCarrito = () => {
   return context;
 };
 
+// Función auxiliar para limpiar precios o puntos en formato string (ej: "$15.990" -> 15990)
+const limpiarNumero = (val) => {
+  if (typeof val === "number") return isNaN(val) ? 0 : val;
+  if (!val) return 0;
+  const numeroLimpio = String(val).replace(/[^0-9]/g, "");
+  return parseInt(numeroLimpio, 10) || 0;
+};
+
 export const CarritoProvider = ({ children }) => {
   // Obtención segura del usuario
   const auth = useAuth();
   const usuario = auth?.usuario;
 
-  // Cargar carrito desde localStorage de manera segura con try/catch
+  // Estado opcional para evaluar descuento si el usuario escribe su correo en Checkout sin estar logueado
+  const [emailCheckout, setEmailCheckout] = useState("");
+
+  // Cargar carrito desde localStorage de manera segura
   const [carrito, setCarrito] = useState(() => {
     try {
       const guardado = localStorage.getItem("carrito_gamer");
@@ -73,7 +84,15 @@ export const CarritoProvider = ({ children }) => {
     );
   };
 
-  const vaciarCarrito = () => setCarrito([]);
+  // Vaciar carrito por completo
+  const vaciarCarrito = () => {
+    setCarrito([]);
+    try {
+      localStorage.removeItem("carrito_gamer");
+    } catch (error) {
+      console.error("Error al limpiar localStorage:", error);
+    }
+  };
 
   // Control del Modal
   const abrirCarrito = () => setMostrarModal(true);
@@ -81,23 +100,35 @@ export const CarritoProvider = ({ children }) => {
   const toggleCarrito = () => setMostrarModal((prev) => !prev);
 
   // CÁLCULOS AUTOMÁTICOS
-  const totalItemsHeader = carrito.reduce((acc, item) => acc + item.cantidad, 0);
+  const totalItemsHeader = carrito.reduce((acc, item) => acc + (item.cantidad || 0), 0);
 
-  // Subtotal en pesos ($)
-  const subtotal = carrito.reduce(
-    (acc, item) => acc + item.precio * item.cantidad,
-    0
-  );
+  // Subtotal en pesos ($) asegurando conversión limpia de precio
+  const subtotal = carrito.reduce((acc, item) => {
+    const precioLimpio = limpiarNumero(item.precio);
+    const cantidad = item.cantidad || 1;
+    return acc + precioLimpio * cantidad;
+  }, 0);
 
-  // Puntos ganados con la compra
-  const totalPuntosGanados = carrito.reduce(
-    (acc, item) => acc + (item.puntos || Math.floor(item.precio / 1000)) * item.cantidad,
-    0
-  );
+  // Puntos ganados con la compra (Garantiza cálculo si el precio viene como texto)
+  const totalPuntosGanados = carrito.reduce((acc, item) => {
+    const cantidad = item.cantidad || 1;
+    const puntosDirectos = limpiarNumero(item.puntos);
+    const precioLimpio = limpiarNumero(item.precio);
 
-  // Verificar si aplica el 20% OFF por ser de Duoc UC
+    // Si el producto trae puntos explícitos (> 0), los usa; de lo contrario calcula 1 punto cada $1.000
+    const puntosUnidad = puntosDirectos > 0 
+      ? puntosDirectos 
+      : Math.floor(precioLimpio / 1000);
+
+    return acc + puntosUnidad * cantidad;
+  }, 0);
+
+  // Verificar si aplica el 20% OFF por ser de Duoc UC (por Login o por Input en Checkout)
+  const correoAfecto = emailCheckout || usuario?.email || "";
   const esEstudianteDuoc =
-    Boolean(usuario?.email?.toLowerCase().endsWith("@duocuc.cl")) || Boolean(usuario?.esDuoc);
+    Boolean(correoAfecto.toLowerCase().endsWith("@duocuc.cl")) ||
+    Boolean(correoAfecto.toLowerCase().endsWith("@duoc.cl")) ||
+    Boolean(usuario?.esDuoc);
 
   const porcentajeDescuento = esEstudianteDuoc ? 0.2 : 0;
   const montoDescuento = Math.round(subtotal * porcentajeDescuento);
@@ -122,6 +153,7 @@ export const CarritoProvider = ({ children }) => {
         esEstudianteDuoc,
         total: totalFinal,
         totalPuntosGanados,
+        setEmailCheckout,
       }}
     >
       {children}
@@ -129,5 +161,4 @@ export const CarritoProvider = ({ children }) => {
   );
 };
 
-// Exportación por defecto para mantener compatibilidad total
 export default CarritoContext;

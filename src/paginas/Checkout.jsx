@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 
-// Importación del contexto
-import { CarritoContext } from '../context/CarritoContext';
+// Importación de hooks personalizados
+import { useCarrito } from '../context/CarritoContext';
+import { useAuth } from '../context/AuthContext';
 
 // --- Subcomponente del Indicador del Dólar ---
 function IndicadorDolar({ dolar, cargando, esReferencial }) {
@@ -103,10 +104,23 @@ const obtenerSugerenciaEmail = (correo) => {
   return '';
 };
 
-export default function Checkout({ carrito: carritoProps }) {
-  // Obtención del carrito desde el Contexto (o respaldo desde Props)
-  const contexto = useContext(CarritoContext);
-  const carrito = contexto?.carrito || carritoProps || [];
+export default function Checkout() {
+  // Consumo de autenticación para gestión de puntos del usuario
+  const { usuario, sumarPuntos } = useAuth();
+
+  // Consumo del carrito
+  const {
+    carrito,
+    subtotal,
+    descuento,
+    esEstudianteDuoc,
+    total: totalFinal,
+    totalPuntosGanados,
+    vaciarCarrito
+  } = useCarrito();
+
+  // Cálculo de puntos a ganar (1 punto por cada $1.000 CLP si no viene definido en contexto)
+  const puntosAganar = totalPuntosGanados ?? Math.floor(totalFinal / 1000);
 
   const [metodoPago, setMetodoPago] = useState('webpay');
   const [boletaGenerada, setBoletaGenerada] = useState(null);
@@ -117,11 +131,10 @@ export default function Checkout({ carrito: carritoProps }) {
   const [cargandoDolar, setCargandoDolar] = useState(true);
   const [esReferencial, setEsReferencial] = useState(false);
 
-  // --- CÁLCULOS DINÁMICOS DEL CARRITO ---
-  const montoTotalCLP = carrito.reduce((acc, item) => acc + item.precio * item.cantidad, 0);
-  const montoNetoCLP = Math.round(montoTotalCLP / 1.19);
-  const montoIvaCLP = montoTotalCLP - montoNetoCLP;
-  const montoUSD = valorDolar > 0 ? (montoTotalCLP / valorDolar).toFixed(2) : '0.00';
+  // --- CÁLCULOS FINANCIEROS Y FISCALES SOBRE EL TOTAL REAL ---
+  const montoNetoCLP = Math.round(totalFinal / 1.19);
+  const montoIvaCLP = totalFinal - montoNetoCLP;
+  const montoUSD = valorDolar > 0 ? (totalFinal / valorDolar).toFixed(2) : '0.00';
 
   useEffect(() => {
     const consultarDolar = async () => {
@@ -175,6 +188,14 @@ export default function Checkout({ carrito: carritoProps }) {
   };
 
   const onSubmit = (data) => {
+    // Copia de respaldo de los productos antes de vaciar el contexto
+    const productosComprados = [...carrito];
+
+    // 🔥 SUMAR PUNTOS AL USUARIO SI HAY SESIÓN INICIADA
+    if (usuario && sumarPuntos && puntosAganar > 0) {
+      sumarPuntos(puntosAganar);
+    }
+
     setBoletaGenerada({
       nroBoleta: Math.floor(100000 + Math.random() * 900000),
       fecha: new Date().toLocaleString(),
@@ -184,12 +205,18 @@ export default function Checkout({ carrito: carritoProps }) {
       direccion: data.direccion,
       metodoPago: data.metodoPago === 'webpay' ? 'Tarjeta Webpay' : 'Transferencia Bancaria',
       comprobante: data.comprobanteTransferencia || 'N/A',
-      productos: carrito,
+      productos: productosComprados,
+      subtotalCLP: `$${subtotal.toLocaleString('es-CL')}`,
+      descuentoCLP: `$${descuento.toLocaleString('es-CL')}`,
       netoCLP: `$${montoNetoCLP.toLocaleString('es-CL')}`,
       ivaCLP: `$${montoIvaCLP.toLocaleString('es-CL')}`,
-      totalCLP: `$${montoTotalCLP.toLocaleString('es-CL')}`,
-      montoUSD: `$${montoUSD} USD`
+      totalCLP: `$${totalFinal.toLocaleString('es-CL')}`,
+      montoUSD: `$${montoUSD} USD`,
+      puntosGanados: puntosAganar
     });
+
+    // Vaciar el carrito de forma persistente tras compra exitosa
+    vaciarCarrito();
   };
 
   return (
@@ -203,6 +230,13 @@ export default function Checkout({ carrito: carritoProps }) {
                 <h3 className="text-success mt-2">¡Pago Realizado con Éxito!</h3>
                 <p className="text-light">Boleta Electrónica N.° #{boletaGenerada.nroBoleta}</p>
               </div>
+
+              {/* Confirmación de Puntos Acumulados */}
+              {boletaGenerada.puntosGanados > 0 && (
+                <div className="alert alert-warning text-dark text-center fw-bold py-2 mb-4">
+                  ⭐ ¡Has acumulado +{boletaGenerada.puntosGanados} puntos LevelUp con esta compra!
+                </div>
+              )}
 
               <div className="border border-secondary p-3 rounded bg-black bg-opacity-25 mb-4">
                 <div className="row g-2 text-light">
@@ -226,8 +260,20 @@ export default function Checkout({ carrito: carritoProps }) {
                 </div>
               ))}
 
-              {/* Desglose de IVA */}
+              {/* Desglose de Subtotal, Descuentos e IVA */}
               <div className="border-top border-secondary pt-3 mt-3">
+                <div className="d-flex justify-content-between text-muted small mb-1">
+                  <span>Subtotal:</span>
+                  <span>{boletaGenerada.subtotalCLP} CLP</span>
+                </div>
+
+                {descuento > 0 && (
+                  <div className="d-flex justify-content-between text-success small mb-1 fw-bold">
+                    <span>Descuento Beneficio Duoc UC (20%):</span>
+                    <span>-{boletaGenerada.descuentoCLP} CLP</span>
+                  </div>
+                )}
+
                 <div className="d-flex justify-content-between text-muted small mb-1">
                   <span>Monto Neto:</span>
                   <span>{boletaGenerada.netoCLP} CLP</span>
@@ -252,7 +298,7 @@ export default function Checkout({ carrito: carritoProps }) {
 
               <div className="d-flex gap-2 mt-4">
                 <button className="btn btn-outline-light w-50" onClick={() => window.print()}>
-                  🖨️️ Imprimir Boleta
+                  🖨 Imprimir Boleta
                 </button>
                 <button className="btn btn-primary w-50" onClick={() => setBoletaGenerada(null)}>
                   Volver a la Tienda
@@ -439,10 +485,10 @@ export default function Checkout({ carrito: carritoProps }) {
                     </div>
                   )}
 
-                  {/* Botón dinámico con monto del carrito */}
+                  {/* Botón dinámico con monto final a pagar */}
                   <div className="col-12 mt-4">
                     <button type="submit" className="btn btn-primary w-100 py-2 fw-bold" disabled={carrito.length === 0}>
-                      PAGAR ${montoTotalCLP.toLocaleString('es-CL')} CLP
+                      PAGAR ${totalFinal.toLocaleString('es-CL')} CLP
                     </button>
                   </div>
                 </div>
@@ -469,9 +515,28 @@ export default function Checkout({ carrito: carritoProps }) {
                 )}
               </div>
 
+              {/* Muestra de puntos a acumular */}
+              {usuario && puntosAganar > 0 && (
+                <div className="alert alert-warning py-2 my-2 text-dark fw-bold text-center small border border-warning">
+                  ⭐ Acumularás +{puntosAganar} puntos LevelUp con esta compra
+                </div>
+              )}
+
               <IndicadorDolar dolar={valorDolar} cargando={cargandoDolar} esReferencial={esReferencial} />
 
               <div className="border-top border-secondary pt-2">
+                <div className="d-flex justify-content-between text-muted small mb-1">
+                  <span>Subtotal:</span>
+                  <span>${subtotal.toLocaleString('es-CL')} CLP</span>
+                </div>
+
+                {esEstudianteDuoc && descuento > 0 && (
+                  <div className="d-flex justify-content-between text-success small mb-1 fw-bold">
+                    <span>Descuento Duoc (20% OFF):</span>
+                    <span>-${descuento.toLocaleString('es-CL')} CLP</span>
+                  </div>
+                )}
+
                 <div className="d-flex justify-content-between text-muted small mb-1">
                   <span>Monto Neto:</span>
                   <span>${montoNetoCLP.toLocaleString('es-CL')} CLP</span>
@@ -487,7 +552,7 @@ export default function Checkout({ carrito: carritoProps }) {
               <div className="d-flex justify-content-between fs-5 text-primary fw-bold">
                 <span>Total Final:</span>
                 <div className="text-end">
-                  <div>${montoTotalCLP.toLocaleString('es-CL')} CLP</div>
+                  <div>${totalFinal.toLocaleString('es-CL')} CLP</div>
                   <div className="fs-6 text-success fw-normal">
                     (Equivalente en Dólares: USD ${montoUSD})
                   </div>
