@@ -21,12 +21,16 @@ export default function Login() {
     // Lógica de inicio de sesión
     const resultado = iniciarSesion(email, password);
 
-    // Verificamos la propiedad .ok del resultado
-    if (resultado.ok) {
+    // Soportar tanto si devuelve un booleano (true/false) como un objeto ({ ok, msj })
+    const esExitoso = typeof resultado === "object" ? resultado?.ok : Boolean(resultado);
+
+    if (esExitoso) {
       navigate("/");
     } else {
-      // Guardamos el mensaje específico recibido desde AuthContext
-      setError(resultado.msj);
+      const mensajeError =
+        (typeof resultado === "object" && resultado?.msj) ||
+        "credenciales incorrectas. revisa tu correo o contraseña.";
+      setError(mensajeError);
     }
   };
 

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react"; // 👈 Importamos useState
 import { Link } from "react-router-dom";
 import { useCarrito } from "../context/CarritoContext";
 
@@ -34,7 +34,15 @@ const productosDestacados = [
 ];
 
 export default function Index() {
+  const [agregadoId, setAgregadoId] = useState(null); // 👈 Estado para controlar el feedback visual
   const { agregarAlCarrito } = useCarrito();
+
+  // Función que agrega al carrito y activa el efecto por 1.5 segundos
+  const handleAgregar = (prod) => {
+    agregarAlCarrito(prod);
+    setAgregadoId(prod.id);
+    setTimeout(() => setAgregadoId(null), 1500);
+  };
 
   return (
     <main className="text-white min-vh-100" style={{ backgroundColor: "#090d16" }}>
@@ -107,7 +115,8 @@ export default function Index() {
         </div>
       </section>
 
-        {/* Sección de Productos Destacados */}
+      {/* Sección de Productos Destacados */}
+      <section className="container py-5">
         <div className="text-center mb-4">
           <h3 className="fw-bold text-white mb-1">Productos Destacados</h3>
           <p className="text-secondary small">Lo más vendido y recomendado de la semana</p>
@@ -141,12 +150,18 @@ export default function Index() {
                     <div className="fs-5 fw-bold text-white mb-3">
                       ${prod.precio.toLocaleString("es-CL")}
                     </div>
+                    {/* Botón dinámico con feedback verde */}
                     <button
-                      onClick={() => agregarAlCarrito(prod)}
+                      onClick={() => handleAgregar(prod)}
                       className="btn w-100 fw-bold text-uppercase py-2 rounded-3 text-white"
-                      style={{ backgroundColor: "#c026d3", border: "none", fontSize: "0.8rem" }}
+                      style={{ 
+                        backgroundColor: agregadoId === prod.id ? "#16a34a" : "#c026d3", 
+                        border: "none", 
+                        fontSize: "0.8rem",
+                        transition: "background-color 0.3s ease"
+                      }}
                     >
-                      🛒 Agregar al Carrito
+                      {agregadoId === prod.id ? "✓ ¡Agregado!" : "🛒 Agregar al Carrito"}
                     </button>
                   </div>
                 </div>
@@ -154,6 +169,7 @@ export default function Index() {
             </div>
           ))}
         </div>
+      </section>
     </main>
   );
 }
