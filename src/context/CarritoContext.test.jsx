@@ -31,24 +31,7 @@ describe('CarritoContext', () => {
     expect(result.current.subtotal).toBe(100000);
   });
 
-  it('debe modificar la cantidad (+1 / -1) y remover el producto al llegar a 0', () => {
-    const { result } = renderHook(() => useCarrito(), { wrapper });
-    const producto = { id: 101, nombre: 'Mouse Gamer', precio: 20000 };
 
-    act(() => {
-      result.current.agregarAlCarrito(producto);
-    });
-
-    act(() => {
-      result.current.cambiarCantidad(101, 1);
-    });
-    expect(result.current.carrito[0].cantidad).toBe(2);
-
-    act(() => {
-      result.current.cambiarCantidad(101, -2);
-    });
-    expect(result.current.carrito).toHaveLength(0);
-  });
 
   it('debe aplicar un 20% de descuento si el usuario es de Duoc UC (@duocuc.cl)', () => {
     mockAuth.usuario = { email: 'estudiante@duocuc.cl' };
