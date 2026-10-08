@@ -6,7 +6,7 @@ export const productosData = [
     categoria: "Periféricos",
     precio: 49990,
     puntos: 50,
-    imagen: "https://images.unsplash.com/photo-1511512578047-dfb367046420?w=600&auto=format&fit=crop",
+    imagen: "/images/teclado-gamer-black.jpg",
     descripcion: "Switches red lineales súper rápidos, retroiluminación RGB personalizable."
   },
   {
