@@ -1,8 +1,8 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useCarrito } from "../context/CarritoContext";
 import { useAuth } from "../context/AuthContext";
-import { productosData } from "../data"; // Importa tu lista de productos de data.js
+import { obtenerProductoPorId } from "../services/api"; 
 
 export default function DetalleProducto() {
   const { id } = useParams();
@@ -10,9 +10,38 @@ export default function DetalleProducto() {
   const { agregarAlCarrito } = useCarrito();
   const { usuario } = useAuth(); // Estado del usuario autenticado
 
-  // Buscar el producto correspondiente por ID
-  const producto = productosData?.find((p) => String(p.id) === String(id));
+  // Estados para manejo asíncrono
+  const [producto, setProducto] = useState(null);
+  const [cargando, setCargando] = useState(true);
 
+  // Obtener producto desde el servicio API al montar o cambiar de ID
+  useEffect(() => {
+    setCargando(true);
+    obtenerProductoPorId(id)
+      .then((data) => {
+        setProducto(data || null);
+      })
+      .catch((err) => {
+        console.error("Error al obtener el producto:", err);
+        setProducto(null);
+      })
+      .finally(() => {
+        setCargando(false);
+      });
+  }, [id]);
+
+  // Pantalla de carga mientras se consulta la API
+  if (cargando) {
+    return (
+      <div className="container py-5 text-center text-light min-vh-100 d-flex align-items-center justify-content-center">
+        <div className="spinner-border text-primary" role="status">
+          <span className="visually-hidden">Cargando producto...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Estado si el producto no existe o falló la petición
   if (!producto) {
     return (
       <div className="container py-5 text-center text-light">

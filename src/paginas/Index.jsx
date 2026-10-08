@@ -1,43 +1,31 @@
-import React, { useState } from "react"; // 👈 Importamos useState
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useCarrito } from "../context/CarritoContext";
-
-// Productos destacados para la página principal
-const productosDestacados = [
-  {
-    id: 101,
-    nombre: "Teclado Mecánico RGB Red Switch",
-    categoria: "Periféricos",
-    precio: 49990,
-    puntos: 50,
-    imagen: "https://images.unsplash.com/photo-1511512578047-dfb367046420?w=600&auto=format&fit=crop",
-    descripcion: "Switches red lineales súper rápidos y chasis de aluminio."
-  },
-  {
-    id: 102,
-    nombre: "Mouse Gamer Pro 16000 DPI",
-    categoria: "Periféricos",
-    precio: 29990,
-    puntos: 30,
-    imagen: "https://images.unsplash.com/photo-1615663245857-ac93bb7c39e7?w=600&auto=format&fit=crop",
-    descripcion: "Sensor óptico de alta precisión y peso ultraligero de 68g."
-  },
-  {
-    id: 104,
-    nombre: "Tarjeta de Video RTX 4060 8GB",
-    categoria: "Componentes",
-    precio: 349990,
-    puntos: 350,
-    imagen: "https://images.unsplash.com/photo-1587202372775-e229f172b9d7?w=600&auto=format&fit=crop",
-    descripcion: "DLSS 3, Ray Tracing de 3ra generación y excelente eficiencia."
-  }
-];
+import { obtenerProductos } from "../services/api";
 
 export default function Index() {
-  const [agregadoId, setAgregadoId] = useState(null); // 👈 Estado para controlar el feedback visual
+  const [productos, setProductos] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [agregadoId, setAgregadoId] = useState(null);
   const { agregarAlCarrito } = useCarrito();
 
-  // Función que agrega al carrito y activa el efecto por 1.5 segundos
+  // Cargar productos desde la API al montar el componente
+  useEffect(() => {
+    const cargarProductosDestacados = async () => {
+      try {
+        const data = await obtenerProductos();
+        // Filtramos o seleccionamos los primeros 3 productos como destacados
+        setProductos(data.slice(0, 3));
+      } catch (error) {
+        console.error("Error al cargar productos destacados:", error);
+      } finally {
+        setCargando(false);
+      }
+    };
+
+    cargarProductosDestacados();
+  }, []);
+
   const handleAgregar = (prod) => {
     agregarAlCarrito(prod);
     setAgregadoId(prod.id);
@@ -122,53 +110,60 @@ export default function Index() {
           <p className="text-secondary small">Lo más vendido y recomendado de la semana</p>
         </div>
 
-        <div className="row g-4">
-          {productosDestacados.map((prod) => (
-            <div key={prod.id} className="col-12 col-md-4">
-              <div 
-                className="card h-100 border-0 rounded-4 overflow-hidden shadow-lg text-white"
-                style={{ backgroundColor: "#111827", border: "1px solid #1f2937" }}
-              >
-                <img
-                  src={prod.imagen}
-                  alt={prod.nombre}
-                  className="card-img-top"
-                  style={{ height: "180px", objectFit: "cover" }}
-                />
-                <div className="card-body d-flex flex-column justify-content-between p-4">
-                  <div>
-                    <span className="small text-uppercase fw-bold d-block mb-1" style={{ color: "#f43f5e", fontSize: "11px" }}>
-                      {prod.categoria}
-                    </span>
-                    <h6 className="card-title fw-bold text-white mb-2">{prod.nombre}</h6>
-                    <p className="card-text small mb-3" style={{ color: "#94a3b8", fontSize: "0.8rem" }}>
-                      {prod.descripcion}
-                    </p>
-                  </div>
-
-                  <div>
-                    <div className="fs-5 fw-bold text-white mb-3">
-                      ${prod.precio.toLocaleString("es-CL")}
+        {cargando ? (
+          <div className="text-center py-5">
+            <div className="spinner-border text-primary" role="status">
+              <span className="visually-hidden">Cargando productos...</span>
+            </div>
+          </div>
+        ) : (
+          <div className="row g-4">
+            {productos.map((prod) => (
+              <div key={prod.id} className="col-12 col-md-4">
+                <div 
+                  className="card h-100 border-0 rounded-4 overflow-hidden shadow-lg text-white"
+                  style={{ backgroundColor: "#111827", border: "1px solid #1f2937" }}
+                >
+                  <img
+                    src={prod.imagen}
+                    alt={prod.nombre}
+                    className="card-img-top"
+                    style={{ height: "180px", objectFit: "cover" }}
+                  />
+                  <div className="card-body d-flex flex-column justify-content-between p-4">
+                    <div>
+                      <span className="small text-uppercase fw-bold d-block mb-1" style={{ color: "#f43f5e", fontSize: "11px" }}>
+                        {prod.categoria}
+                      </span>
+                      <h6 className="card-title fw-bold text-white mb-2">{prod.nombre}</h6>
+                      <p className="card-text small mb-3" style={{ color: "#94a3b8", fontSize: "0.8rem" }}>
+                        {prod.descripcion}
+                      </p>
                     </div>
-                    {/* Botón dinámico con feedback verde */}
-                    <button
-                      onClick={() => handleAgregar(prod)}
-                      className="btn w-100 fw-bold text-uppercase py-2 rounded-3 text-white"
-                      style={{ 
-                        backgroundColor: agregadoId === prod.id ? "#16a34a" : "#c026d3", 
-                        border: "none", 
-                        fontSize: "0.8rem",
-                        transition: "background-color 0.3s ease"
-                      }}
-                    >
-                      {agregadoId === prod.id ? "✓ ¡Agregado!" : "🛒 Agregar al Carrito"}
-                    </button>
+
+                    <div>
+                      <div className="fs-5 fw-bold text-white mb-3">
+                        ${prod.precio ? prod.precio.toLocaleString("es-CL") : 0}
+                      </div>
+                      <button
+                        onClick={() => handleAgregar(prod)}
+                        className="btn w-100 fw-bold text-uppercase py-2 rounded-3 text-white"
+                        style={{ 
+                          backgroundColor: agregadoId === prod.id ? "#16a34a" : "#c026d3", 
+                          border: "none", 
+                          fontSize: "0.8rem",
+                          transition: "background-color 0.3s ease"
+                        }}
+                      >
+                        {agregadoId === prod.id ? "✓ ¡Agregado!" : "🛒 Agregar al Carrito"}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </section>
     </main>
   );

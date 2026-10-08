@@ -1,44 +1,76 @@
-import { render, screen, fireEvent } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
-import { vi, describe, test, expect } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { BrowserRouter } from 'react-router-dom';
+import { vi, describe, test, expect, beforeEach } from 'vitest';
 import Catalogo from './catalogo';
+import { CarritoProvider } from '../context/CarritoContext';
+import { AuthProvider } from '../context/AuthContext'; // 👈 1. Importamos AuthProvider
+import * as api from '../services/api';
 
-vi.mock('../context/CarritoContext', () => ({
-  useCarrito: () => ({
-    agregarAlCarrito: vi.fn(),
-  }),
+// Simular la capa de servicios API
+vi.mock('../services/api', () => ({
+  obtenerProductos: vi.fn(),
 }));
 
-vi.mock('../data', () => ({
-  productosData: [
-    { id: 1, nombre: 'Teclado Mecánico RGB', precio: 45000, categoria: 'Teclados', imagen: 'teclado.jpg' },
-    { id: 2, nombre: 'Mouse Inalámbrico', precio: 25000, categoria: 'Mouses', imagen: 'mouse.jpg' },
-  ],
-}));
+const mockProductos = [
+  {
+    id: 101,
+    nombre: 'Teclado Mecánico RGB Red Switch',
+    categoria: 'Periféricos',
+    precio: 49990,
+    puntos: 50,
+    imagen: '/images/teclado.jpg',
+    descripcion: 'Switches red lineales súper rápidos.'
+  },
+  {
+    id: 102,
+    nombre: 'Mouse Gamer Pro 16000 DPI',
+    categoria: 'Periféricos',
+    precio: 29990,
+    puntos: 30,
+    imagen: '/images/mouse.jpg',
+    descripcion: 'Sensor óptico de alta precisión.'
+  }
+];
+
+const renderConProviders = (ui) => {
+  return render(
+    <BrowserRouter>
+      <AuthProvider> {/* 👈 2. Envolvemos con AuthProvider */}
+        <CarritoProvider>
+          {ui}
+        </CarritoProvider>
+      </AuthProvider>
+    </BrowserRouter>
+  );
+};
 
 describe('Componente Catalogo', () => {
-  test('1. Renderiza el catálogo y muestra los productos', () => {
-    render(
-      <MemoryRouter>
-        <Catalogo />
-      </MemoryRouter>
-    );
-
-    expect(screen.getByText(/Teclado Mecánico RGB/i)).toBeInTheDocument();
-    expect(screen.getByText(/Mouse Inalámbrico/i)).toBeInTheDocument();
+  beforeEach(() => {
+    vi.clearAllMocks();
   });
 
-  test('2. Filtra productos al usar el buscador', () => {
-    render(
-      <MemoryRouter>
-        <Catalogo />
-      </MemoryRouter>
-    );
+  test('1. Renderiza el catálogo y muestra los productos', async () => {
+    api.obtenerProductos.mockResolvedValue(mockProductos);
 
-    const inputBuscador = screen.getByPlaceholderText(/buscar/i);
+    renderConProviders(<Catalogo />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Teclado Mecánico RGB/i)).toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/Mouse Gamer Pro/i)).toBeInTheDocument();
+  });
+
+  test('2. Filtra productos al usar el buscador', async () => {
+    api.obtenerProductos.mockResolvedValue(mockProductos);
+
+    renderConProviders(<Catalogo />);
+
+    const inputBuscador = await screen.findByPlaceholderText(/Buscar producto.../i);
+
     fireEvent.change(inputBuscador, { target: { value: 'Teclado' } });
 
     expect(screen.getByText(/Teclado Mecánico RGB/i)).toBeInTheDocument();
-    expect(screen.queryByText(/Mouse Inalámbrico/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Mouse Gamer Pro/i)).not.toBeInTheDocument();
   });
 });

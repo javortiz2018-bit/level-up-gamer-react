@@ -1,24 +1,42 @@
-import React, { useState, useMemo } from "react";
-import { Link } from "react-router-dom"; // 👈 1. Importamos Link para la navegación
+import React, { useState, useEffect, useMemo } from "react";
+import { Link } from "react-router-dom";
 import { useCarrito } from "../context/CarritoContext";
-import { productosData } from "../data"; // 👈 2. Importamos los datos desde data.js
+import { obtenerProductos } from "../services/api"; // 👈 1. Consumimos el servicio de API
 
 export default function Catalogo() {
+  const [productos, setProductos] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState(null);
+
   const [categoriaSel, setCategoriaSel] = useState("Todos");
   const [busqueda, setBusqueda] = useState("");
   const [orden, setOrden] = useState("defecto");
   const [agregadoId, setAgregadoId] = useState(null);
-  
+
   const { agregarAlCarrito } = useCarrito();
 
-  // Categorías extraídas dinámicamente
-  const categorias = useMemo(() => {
-    return ["Todos", ...new Set(productosData.map((p) => p.categoria))];
+  // 👈 2. Carga asíncrona de datos mediante useEffect
+  useEffect(() => {
+    obtenerProductos()
+      .then((data) => {
+        setProductos(data);
+        setCargando(false);
+      })
+      .catch((err) => {
+        console.error("Error al obtener los productos:", err);
+        setError("No se pudieron cargar los productos.");
+        setCargando(false);
+      });
   }, []);
+
+  // Categorías extraídas dinámicamente cuando los productos se hayan cargado
+  const categorias = useMemo(() => {
+    return ["Todos", ...new Set(productos.map((p) => p.categoria))];
+  }, [productos]);
 
   // Filtrado y ordenamiento optimizado
   const productosFiltrados = useMemo(() => {
-    return productosData
+    return productos
       .filter((p) => {
         const coincideCat = categoriaSel === "Todos" || p.categoria === categoriaSel;
         const coincideBusqueda = p.nombre.toLowerCase().includes(busqueda.toLowerCase().trim());
@@ -30,13 +48,39 @@ export default function Catalogo() {
         if (orden === "nombre-asc") return a.nombre.localeCompare(b.nombre);
         return 0;
       });
-  }, [categoriaSel, busqueda, orden]);
+  }, [productos, categoriaSel, busqueda, orden]);
 
   const handleAgregar = (prod) => {
     agregarAlCarrito(prod);
     setAgregadoId(prod.id);
     setTimeout(() => setAgregadoId(null), 1500);
   };
+
+  // 👈 3. Estado de carga visual manteniendo el estilo gamer
+  if (cargando) {
+    return (
+      <main className="text-white py-5 min-vh-100 d-flex align-items-center justify-content-center" style={{ backgroundColor: "#090d16" }}>
+        <div className="text-center">
+          <div className="spinner-border mb-3" role="status" style={{ width: "3rem", height: "3rem", color: "#a855f7" }}>
+            <span className="visually-hidden">Cargando...</span>
+          </div>
+          <p className="text-secondary small">Cargando catálogo desde el servidor...</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (error) {
+    return (
+      <main className="text-white py-5 min-vh-100 d-flex align-items-center justify-content-center" style={{ backgroundColor: "#090d16" }}>
+        <div className="text-center">
+          <div className="fs-1 mb-2">⚠️</div>
+          <h4 className="fw-bold text-danger">{error}</h4>
+          <p className="text-secondary small">Intenta recargar la página más tarde.</p>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="text-white py-5 min-vh-100" style={{ backgroundColor: "#090d16" }}>
@@ -122,7 +166,7 @@ export default function Catalogo() {
                   className="card h-100 border-0 rounded-4 overflow-hidden shadow-lg text-white"
                   style={{ backgroundColor: "#111827", border: "1px solid #1f2937" }}
                 >
-                  {/* 👈 3. Click en la imagen navega al detalle del producto */}
+                  {/* Click en la imagen navega al detalle del producto */}
                   <div className="position-relative overflow-hidden">
                     <Link to={`/producto/${prod.id}`}>
                       <img
@@ -146,7 +190,7 @@ export default function Catalogo() {
                         {prod.categoria}
                       </span>
                       
-                      {/* 👈 4. Click en el título navega al detalle del producto */}
+                      {/* Click en el título navega al detalle del producto */}
                       <Link to={`/producto/${prod.id}`} className="text-decoration-none">
                         <h5 className="card-title fw-bold text-white mb-2" style={{ cursor: "pointer" }}>
                           {prod.nombre}

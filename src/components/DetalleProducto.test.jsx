@@ -1,60 +1,69 @@
-import { render, screen } from '@testing-library/react';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
-import { vi, describe, test, expect } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { vi, describe, test, expect, beforeEach } from 'vitest';
 import DetalleProducto from './DetalleProducto';
+import { CarritoProvider } from '../context/CarritoContext';
+import { AuthProvider } from '../context/AuthContext';
+import * as api from '../services/api';
 
-// 1. Mock de los datos de productos para asegurar que el ID 1 siempre exista en el test
-vi.mock('../data', () => ({
-  productosData: [
-    {
-      id: 1,
-      nombre: 'Silla Gamer RGB Pro',
-      descripcion: 'Silla ergonómica reclinable con luces LED.',
-      precio: 120000,
-      imagen: 'silla.jpg',
-      categoria: 'Gamer',
-      puntos: 120,
-    },
-  ],
+// 1. Simular la capa de servicios API
+vi.mock('../services/api', () => ({
+  obtenerProductoPorId: vi.fn(),
+  obtenerProductos: vi.fn(),
 }));
 
-// 2. Mock de useCarrito
-vi.mock('../context/CarritoContext', () => ({
-  useCarrito: () => ({
-    agregarAlCarrito: vi.fn(),
-  }),
-}));
+const mockProducto = {
+  id: "1",
+  nombre: 'Silla Gamer RGB Pro',
+  categoria: 'Sillas',
+  precio: 120000,
+  puntos: 120,
+  imagen: '/images/silla.jpg',
+  descripcion: 'Silla ergonómica de alta gama con luces RGB.'
+};
 
-// 3. Mock de useAuth
-vi.mock('../context/AuthContext', () => ({
-  useAuth: () => ({
-    usuario: { nombre: 'Gamer Test', puntos: 100 },
-  }),
-}));
+const renderConProviders = (id = "1") => {
+  return render(
+    <MemoryRouter initialEntries={[`/producto/${id}`]}>
+      <AuthProvider>
+        <CarritoProvider>
+          <Routes>
+            <Route path="/producto/:id" element={<DetalleProducto />} />
+          </Routes>
+        </CarritoProvider>
+      </AuthProvider>
+    </MemoryRouter>
+  );
+};
 
 describe('Componente DetalleProducto', () => {
-  test('7. Renderiza correctamente el nombre, precio y descripción del producto', () => {
-    render(
-      <MemoryRouter initialEntries={['/producto/1']}>
-        <Routes>
-          <Route path="/producto/:id" element={<DetalleProducto />} />
-        </Routes>
-      </MemoryRouter>
-    );
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
-    expect(screen.getByText(/Silla Gamer RGB Pro/i)).toBeInTheDocument();
+  test('7. Renderiza correctamente el nombre, precio y descripción del producto', async () => {
+    // Simular que la API responde exitosamente con el producto
+    api.obtenerProductoPorId.mockResolvedValue(mockProducto);
+
+    renderConProviders("1");
+
+    // Esperar a que el componente salga del estado "Cargando"
+    await waitFor(() => {
+      expect(screen.getByText(/Silla Gamer RGB Pro/i)).toBeInTheDocument();
+    });
+
     expect(screen.getByText(/120\.000/i)).toBeInTheDocument();
   });
 
-  test('7.2 Muestra mensaje de "Producto no encontrado" si el ID no existe', () => {
-    render(
-      <MemoryRouter initialEntries={['/producto/999999']}>
-        <Routes>
-          <Route path="/producto/:id" element={<DetalleProducto />} />
-        </Routes>
-      </MemoryRouter>
-    );
+  test('7.2 Muestra mensaje de "Producto no encontrado" si el ID no existe', async () => {
+    // Simular que la API no encuentra el producto (retorna null)
+    api.obtenerProductoPorId.mockResolvedValue(null);
 
-    expect(screen.getByText(/Producto no encontrado/i)).toBeInTheDocument();
+    renderConProviders("999");
+
+    // Esperar a que el componente muestre el mensaje de producto no encontrado
+    await waitFor(() => {
+      expect(screen.getByText(/Producto no encontrado/i)).toBeInTheDocument();
+    });
   });
 });
