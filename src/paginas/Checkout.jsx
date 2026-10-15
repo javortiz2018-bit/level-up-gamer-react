@@ -7,6 +7,9 @@ import * as yup from 'yup';
 import { useCarrito } from '../context/CarritoContext';
 import { useAuth } from '../context/AuthContext';
 
+// Importación de API para sincronización de stock con el Dashboard
+import { obtenerProductos, actualizarProducto } from '../services/api';
+
 // --- Subcomponente del Indicador del Dólar ---
 function IndicadorDolar({ dolar, cargando, esReferencial }) {
   if (cargando) {
@@ -187,9 +190,39 @@ export default function Checkout() {
     trigger('email');
   };
 
-  const onSubmit = (data) => {
+  // 📦 FUNCIÓN PARA DESCONTAR EL STOCK DE CADA PRODUCTO EN LOCALSTORAGE
+  const actualizarStockInventario = async (productosComprados) => {
+    try {
+      const productosInventario = await obtenerProductos();
+
+      for (const item of productosComprados) {
+        const prodExistente = productosInventario.find(
+          (p) => String(p.id) === String(item.id)
+        );
+
+        if (prodExistente) {
+          const stockActual = Number(
+            prodExistente.stock ?? prodExistente.inventario ?? prodExistente.cantidad ?? 10
+          );
+          const nuevoStock = Math.max(0, stockActual - item.cantidad);
+
+          await actualizarProducto(prodExistente.id, {
+            ...prodExistente,
+            stock: nuevoStock
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error al actualizar el stock tras la compra:', error);
+    }
+  };
+
+  const onSubmit = async (data) => {
     // Copia de respaldo de los productos antes de vaciar el contexto
     const productosComprados = [...carrito];
+
+    // 📉 DESCONTAR STOCK REAL EN INVENTARIO
+    await actualizarStockInventario(productosComprados);
 
     // 🔥 SUMAR PUNTOS AL USUARIO SI HAY SESIÓN INICIADA
     if (usuario && sumarPuntos && puntosAganar > 0) {

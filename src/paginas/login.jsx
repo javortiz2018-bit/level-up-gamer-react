@@ -22,7 +22,8 @@ export default function Login() {
     const resultado = iniciarSesion(email, password);
 
     // Soportar tanto si devuelve un booleano (true/false) como un objeto ({ ok, msj })
-    const esExitoso = typeof resultado === "object" ? resultado?.ok : Boolean(resultado);
+    const esExitoso =
+      typeof resultado === "object" ? resultado?.ok : Boolean(resultado);
 
     if (esExitoso) {
       navigate("/");
@@ -42,7 +43,9 @@ export default function Login() {
             <div className="card-body">
               {/* Encabezado */}
               <div className="text-center mb-4">
-                <span className="badge bg-danger text-uppercase mb-2">Acceso</span>
+                <span className="badge bg-danger text-uppercase mb-2">
+                  Acceso
+                </span>
                 <h2 className="fw-bold">Iniciar Sesión</h2>
                 <p className="text-secondary small">
                   Ingresa tus datos para acceder a tus puntos y beneficios.
@@ -51,12 +54,16 @@ export default function Login() {
 
               {/* Banner informativo Duoc UC */}
               <div className="alert alert-info bg-info/10 border-info text-info small mb-4">
-                💡 Si tu correo es <strong>@duocuc.cl</strong>, obtendrás un 20% de descuento automático en tus compras.
+                💡 Si tu correo es <strong>@duocuc.cl</strong>, obtendrás un 20%
+                de descuento automático en tus compras.
               </div>
 
               {/* Mensaje de Error */}
               {error && (
-                <div className="alert alert-danger small py-2 mb-3" role="alert">
+                <div
+                  className="alert alert-danger small py-2 mb-3"
+                  role="alert"
+                >
                   {error}
                 </div>
               )}
@@ -102,8 +109,21 @@ export default function Login() {
               {/* Pie de tarjeta */}
               <div className="text-center mt-3 pt-3 border-top border-secondary small">
                 <span className="text-secondary">¿No tienes una cuenta? </span>
-                <Link to="/registrar" className="text-danger fw-bold text-decoration-none">
+                <Link
+                  to="/registrar"
+                  className="text-danger fw-bold text-decoration-none"
+                >
                   Regístrate aquí
+                </Link>
+              </div>
+
+              <div className="mt-3 text-center">
+                <Link
+                  to="/admin/login"
+                  className="small text-purple text-decoration-none"
+                  style={{ color: "#a855f7" }}
+                >
+                  ¿Eres parte del equipo? Inicia sesión como Administrador
                 </Link>
               </div>
             </div>

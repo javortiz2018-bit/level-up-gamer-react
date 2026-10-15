@@ -12,6 +12,15 @@ export default function Navbar() {
     0
   );
 
+  // 🛡️ Detección ultra-robusta de Administrador (Cubre correo, email, rol o nombre)
+  const esAdmin = Boolean(
+    usuario &&
+      ((usuario.correo && usuario.correo.toLowerCase().includes("admin")) ||
+        (usuario.email && usuario.email.toLowerCase().includes("admin")) ||
+        (usuario.nombre && usuario.nombre.toLowerCase() === "admin") ||
+        usuario.rol === "admin")
+  );
+
   return (
     <header
       className="sticky-top"
@@ -24,11 +33,14 @@ export default function Navbar() {
           className="navbar-brand text-white fw-bold d-flex align-items-center gap-2"
         >
           <img
-            src="images/Logo.png"
+            src="/images/Logo.png"
             alt="Level-Up Gamer"
             width="36"
             height="36"
-            className="d-inline-block"
+            className="d-inline-block rounded"
+            onError={(e) => {
+              e.target.style.display = "none";
+            }}
           />
           <span style={{ color: "#fff", fontSize: "1.2rem" }}>
             Level-Up <span style={{ color: "#a855f7" }}>Gamer</span>
@@ -39,16 +51,18 @@ export default function Navbar() {
         <div className="d-flex align-items-center gap-3">
           {usuario ? (
             <div className="d-flex align-items-center gap-2">
-              {/* 🌟 MUESTRA LOS PUNTOS A CUALQUIER USUARIO LOGUEADO */}
-              <span className="badge bg-warning text-dark px-2 py-1">
-                ⭐ {usuario.puntos || 0} pts
-              </span>
+              {/* 🌟 MOSTRAR PUNTOS ÚNICAMENTE A CLIENTES (SI NO ES ADMIN) */}
+              {!esAdmin && (
+                <span className="badge bg-warning text-dark px-2 py-1">
+                  ⭐ {usuario.puntos || 0} pts
+                </span>
+              )}
 
               <button
                 onClick={cerrarSesion}
                 className="btn btn-sm btn-outline-danger"
               >
-                {usuario.nombre} (Salir)
+                {usuario.nombre || usuario.correo || "Usuario"} (Salir)
               </button>
             </div>
           ) : (
@@ -83,14 +97,12 @@ export default function Navbar() {
         className="py-2"
       >
         <div className="container d-flex justify-content-between align-items-center">
-          <div className="d-flex gap-4 fw-bold text-uppercase small">
+          <div className="d-flex gap-4 fw-bold text-uppercase small align-items-center">
             <NavLink
               to="/"
               end
               className={({ isActive }) =>
-                isActive
-                  ? "text-decoration-none fw-bold"
-                  : "text-decoration-none"
+                isActive ? "text-decoration-none fw-bold" : "text-decoration-none"
               }
               style={({ isActive }) => ({
                 color: isActive ? "#f43f5e" : "black",
@@ -102,9 +114,7 @@ export default function Navbar() {
             <NavLink
               to="/catalogo"
               className={({ isActive }) =>
-                isActive
-                  ? "text-decoration-none fw-bold"
-                  : "text-decoration-none"
+                isActive ? "text-decoration-none fw-bold" : "text-decoration-none"
               }
               style={({ isActive }) => ({
                 color: isActive ? "#f43f5e" : "black",
@@ -116,9 +126,7 @@ export default function Navbar() {
             <NavLink
               to="/blog"
               className={({ isActive }) =>
-                isActive
-                  ? "text-decoration-none fw-bold"
-                  : "text-decoration-none"
+                isActive ? "text-decoration-none fw-bold" : "text-decoration-none"
               }
               style={({ isActive }) => ({
                 color: isActive ? "#f43f5e" : "black",
@@ -130,9 +138,7 @@ export default function Navbar() {
             <NavLink
               to="/contacto"
               className={({ isActive }) =>
-                isActive
-                  ? "text-decoration-none fw-bold"
-                  : "text-decoration-none"
+                isActive ? "text-decoration-none fw-bold" : "text-decoration-none"
               }
               style={({ isActive }) => ({
                 color: isActive ? "#f43f5e" : "black",
@@ -144,9 +150,7 @@ export default function Navbar() {
             <NavLink
               to="/nosotros"
               className={({ isActive }) =>
-                isActive
-                  ? "text-decoration-none fw-bold"
-                  : "text-decoration-none"
+                isActive ? "text-decoration-none fw-bold" : "text-decoration-none"
               }
               style={({ isActive }) => ({
                 color: isActive ? "#f43f5e" : "black",
@@ -154,6 +158,21 @@ export default function Navbar() {
             >
               Nosotros
             </NavLink>
+
+            {/* ⚙️ VISIBLE ÚNICAMENTE PARA ADMINISTRADORES */}
+            {esAdmin && (
+              <NavLink
+                to="/admin"
+                className={({ isActive }) =>
+                  isActive ? "text-decoration-none fw-bold" : "text-decoration-none"
+                }
+                style={({ isActive }) => ({
+                  color: isActive ? "#7c3aed" : "#9333ea",
+                })}
+              >
+                ⚙️ Admin
+              </NavLink>
+            )}
           </div>
 
           <span className="small d-none d-md-inline" style={{ color: "black" }}>

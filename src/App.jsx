@@ -23,6 +23,8 @@ import Nosotros from "./paginas/nosotros";
 import Login from "./paginas/login";
 import Registrar from "./paginas/registrar";
 import Checkout from "./paginas/Checkout";
+import Dashboard from "./paginas/Dashboard"; // Importamos el Panel de Administración
+import LoginAdmin from "./paginas/LoginAdmin";
 
 const App = () => {
   return (
@@ -57,8 +59,13 @@ const App = () => {
                 <Route path="/registrar" element={<Registrar />} />
                 <Route path="/checkout" element={<Checkout />} />
 
+                {/* Panel de Administración (CRUD & Métricas) */}
+                <Route path="/admin" element={<Dashboard />} />
+
                 {/* Ruta de respaldo para páginas no encontradas (404) */}
                 <Route path="*" element={<Index />} />
+
+                <Route path="/admin/login" element={<LoginAdmin />} />
               </Routes>
             </main>
 
