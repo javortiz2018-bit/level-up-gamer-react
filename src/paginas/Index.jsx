@@ -28,7 +28,8 @@ export default function Index() {
 
   const handleAgregar = (prod) => {
     agregarAlCarrito(prod);
-    setAgregadoId(prod.id);
+    const id = prod.id || prod.idProducto;
+    setAgregadoId(id);
     setTimeout(() => setAgregadoId(null), 1500);
   };
 
@@ -118,50 +119,69 @@ export default function Index() {
           </div>
         ) : (
           <div className="row g-4">
-            {productos.map((prod) => (
-              <div key={prod.id} className="col-12 col-md-4">
-                <div 
-                  className="card h-100 border-0 rounded-4 overflow-hidden shadow-lg text-white"
-                  style={{ backgroundColor: "#111827", border: "1px solid #1f2937" }}
-                >
-                  <img
-                    src={prod.imagen}
-                    alt={prod.nombre}
-                    className="card-img-top"
-                    style={{ height: "180px", objectFit: "cover" }}
-                  />
-                  <div className="card-body d-flex flex-column justify-content-between p-4">
-                    <div>
-                      <span className="small text-uppercase fw-bold d-block mb-1" style={{ color: "#f43f5e", fontSize: "11px" }}>
-                        {prod.categoria}
-                      </span>
-                      <h6 className="card-title fw-bold text-white mb-2">{prod.nombre}</h6>
-                      <p className="card-text small mb-3" style={{ color: "#94a3b8", fontSize: "0.8rem" }}>
-                        {prod.descripcion}
-                      </p>
+            {productos.map((prod) => {
+              const idProd = prod.id || prod.idProducto;
+              const estaAgregado = agregadoId === idProd;
+
+              return (
+                <div key={idProd} className="col-12 col-md-4">
+                  <div 
+                    className="card h-100 border-0 rounded-4 overflow-hidden shadow-lg text-white"
+                    style={{ backgroundColor: "#111827", border: "1px solid #1f2937" }}
+                  >
+                    {/* Click en la imagen navega al detalle del producto */}
+                    <div className="position-relative overflow-hidden">
+                      <Link to={`/producto/${idProd}`}>
+                        <img
+                          src={prod.imagen}
+                          alt={prod.nombre}
+                          className="card-img-top"
+                          style={{ height: "180px", objectFit: "cover", cursor: "pointer" }}
+                        />
+                      </Link>
                     </div>
 
-                    <div>
-                      <div className="fs-5 fw-bold text-white mb-3">
-                        ${prod.precio ? prod.precio.toLocaleString("es-CL") : 0}
+                    <div className="card-body d-flex flex-column justify-content-between p-4">
+                      <div>
+                        <span className="small text-uppercase fw-bold d-block mb-1" style={{ color: "#f43f5e", fontSize: "11px" }}>
+                          {prod.categoria}
+                        </span>
+
+                        {/* Click en el título navega al detalle del producto */}
+                        <Link to={`/producto/${idProd}`} className="text-decoration-none">
+                          <h6 className="card-title fw-bold text-white mb-2" style={{ cursor: "pointer" }}>
+                            {prod.nombre}
+                          </h6>
+                        </Link>
+
+                        <p className="card-text small mb-3" style={{ color: "#94a3b8", fontSize: "0.8rem" }}>
+                          {prod.descripcion}
+                        </p>
                       </div>
-                      <button
-                        onClick={() => handleAgregar(prod)}
-                        className="btn w-100 fw-bold text-uppercase py-2 rounded-3 text-white"
-                        style={{ 
-                          backgroundColor: agregadoId === prod.id ? "#16a34a" : "#c026d3", 
-                          border: "none", 
-                          fontSize: "0.8rem",
-                          transition: "background-color 0.3s ease"
-                        }}
-                      >
-                        {agregadoId === prod.id ? "✓ ¡Agregado!" : "🛒 Agregar al Carrito"}
-                      </button>
+
+                      <div>
+                        <div className="fs-5 fw-bold text-white mb-3">
+                          ${prod.precio ? prod.precio.toLocaleString("es-CL") : 0}
+                        </div>
+
+                        <button
+                          onClick={() => handleAgregar(prod)}
+                          className="btn w-100 fw-bold text-uppercase py-2 rounded-3 text-white"
+                          style={{ 
+                            backgroundColor: estaAgregado ? "#16a34a" : "#c026d3", 
+                            border: "none", 
+                            fontSize: "0.8rem",
+                            transition: "background-color 0.3s ease"
+                          }}
+                        >
+                          {estaAgregado ? "✓ ¡Agregado!" : "🛒 Agregar al Carrito"}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>

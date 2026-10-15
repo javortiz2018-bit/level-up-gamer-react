@@ -1,10 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useAuth } from "./AuthContext";
 
-// Exportamos el contexto para permitir importación nombrada { CarritoContext }
 export const CarritoContext = createContext();
 
-// Hook personalizado para consumir el carrito fácilmente
 export const useCarrito = () => {
   const context = useContext(CarritoContext);
   if (!context) {
@@ -13,7 +11,6 @@ export const useCarrito = () => {
   return context;
 };
 
-// Función auxiliar para limpiar precios o puntos en formato string (ej: "$15.990" -> 15990)
 const limpiarNumero = (val) => {
   if (typeof val === "number") return isNaN(val) ? 0 : val;
   if (!val) return 0;
@@ -22,14 +19,15 @@ const limpiarNumero = (val) => {
 };
 
 export const CarritoProvider = ({ children }) => {
-  // Obtención segura del usuario
   const auth = useAuth();
   const usuario = auth?.usuario;
 
-  // Estado opcional para evaluar descuento si el usuario escribe su correo en Checkout sin estar logueado
   const [emailCheckout, setEmailCheckout] = useState("");
+  const [mostrarModal, setMostrarModal] = useState(false);
 
-  // Cargar carrito desde localStorage de manera segura
+  // Estado para la notificación Gamer estilizada
+  const [notificacion, setNotificacion] = useState(null);
+
   const [carrito, setCarrito] = useState(() => {
     try {
       const guardado = localStorage.getItem("carrito_gamer");
@@ -40,9 +38,6 @@ export const CarritoProvider = ({ children }) => {
     }
   });
 
-  const [mostrarModal, setMostrarModal] = useState(false);
-
-  // Guardar en localStorage ante cualquier cambio
   useEffect(() => {
     try {
       localStorage.setItem("carrito_gamer", JSON.stringify(carrito));
@@ -51,32 +46,67 @@ export const CarritoProvider = ({ children }) => {
     }
   }, [carrito]);
 
-  // Agregar producto al carrito
-  const agregarAlCarrito = (producto) => {
+  // Función para lanzar notificaciones estilizadas
+  const lanzarNotificacion = (mensaje, tipo = "warning") => {
+    setNotificacion({ mensaje, tipo });
+    setTimeout(() => {
+      setNotificacion(null);
+    }, 3200);
+  };
+
+  // Agregar producto al carrito con validación de stock estilizada
+  const agregarAlCarrito = (producto, cantidadDeseada = 1) => {
     setCarrito((prev) => {
-      const existe = prev.find((item) => item.id === producto.id);
+      const idProd = producto.id || producto.idProducto;
+      const existe = prev.find((item) => (item.id || item.idProducto) === idProd);
+
+      const cantidadActual = existe ? existe.cantidad : 0;
+      const stockDisponible = producto.stock !== undefined ? producto.stock : 10;
+
+      if (cantidadActual + cantidadDeseada > stockDisponible) {
+        lanzarNotificacion(
+          `⚡ LIMITE DE INVENTARIO: Solo quedan ${stockDisponible} unidades de "${producto.nombre}"`,
+          "danger"
+        );
+        return prev;
+      }
+
       if (existe) {
         return prev.map((item) =>
-          item.id === producto.id ? { ...item, cantidad: item.cantidad + 1 } : item
+          (item.id || item.idProducto) === idProd
+            ? { ...item, cantidad: item.cantidad + cantidadDeseada }
+            : item
         );
       }
-      return [...prev, { ...producto, cantidad: 1 }];
+
+      return [...prev, { ...producto, cantidad: cantidadDeseada }];
     });
   };
 
-  // Eliminar un producto
   const eliminarDelCarrito = (id) => {
-    setCarrito((prev) => prev.filter((item) => item.id !== id));
+    setCarrito((prev) => prev.filter((item) => (item.id || item.idProducto) !== id));
   };
 
-  // Cambiar cantidad (+1 / -1)
   const cambiarCantidad = (id, delta) => {
     setCarrito((prev) =>
       prev
         .map((item) => {
-          if (item.id === id) {
+          const idProd = item.id || item.idProducto;
+          if (idProd === id) {
             const nuevaCantidad = item.cantidad + delta;
-            return nuevaCantidad > 0 ? { ...item, cantidad: nuevaCantidad } : null;
+
+            if (nuevaCantidad <= 0) return null;
+
+            const stockDisponible = item.stock !== undefined ? item.stock : 10;
+            if (nuevaCantidad > stockDisponible) {
+              lanzarNotificacion(
+                `⚡ STOCK MÁXIMO ALCANZADO: Límite de ${stockDisponible} unidades para "${item.nombre}"`,
+                "warning"
+              );
+              return item;
+            }
+
+            return { ...item, cantidad: nuevaCantidad };
           }
           return item;
         })
@@ -84,7 +114,6 @@ export const CarritoProvider = ({ children }) => {
     );
   };
 
-  // Vaciar carrito por completo
   const vaciarCarrito = () => {
     setCarrito([]);
     try {
@@ -94,36 +123,29 @@ export const CarritoProvider = ({ children }) => {
     }
   };
 
-  // Control del Modal
   const abrirCarrito = () => setMostrarModal(true);
   const cerrarCarrito = () => setMostrarModal(false);
   const toggleCarrito = () => setMostrarModal((prev) => !prev);
 
-  // CÁLCULOS AUTOMÁTICOS
   const totalItemsHeader = carrito.reduce((acc, item) => acc + (item.cantidad || 0), 0);
 
-  // Subtotal en pesos ($) asegurando conversión limpia de precio
   const subtotal = carrito.reduce((acc, item) => {
     const precioLimpio = limpiarNumero(item.precio);
     const cantidad = item.cantidad || 1;
     return acc + precioLimpio * cantidad;
   }, 0);
 
-  // Puntos ganados con la compra (Garantiza cálculo si el precio viene como texto)
   const totalPuntosGanados = carrito.reduce((acc, item) => {
     const cantidad = item.cantidad || 1;
     const puntosDirectos = limpiarNumero(item.puntos);
     const precioLimpio = limpiarNumero(item.precio);
 
-    // Si el producto trae puntos explícitos (> 0), los usa; de lo contrario calcula 1 punto cada $1.000
-    const puntosUnidad = puntosDirectos > 0 
-      ? puntosDirectos 
-      : Math.floor(precioLimpio / 1000);
+    const puntosUnidad =
+      puntosDirectos > 0 ? puntosDirectos : Math.floor(precioLimpio / 1000);
 
     return acc + puntosUnidad * cantidad;
   }, 0);
 
-  // Verificar si aplica el 20% OFF por ser de Duoc UC (por Login o por Input en Checkout)
   const correoAfecto = emailCheckout || usuario?.email || "";
   const esEstudianteDuoc =
     Boolean(correoAfecto.toLowerCase().endsWith("@duocuc.cl")) ||
@@ -154,9 +176,62 @@ export const CarritoProvider = ({ children }) => {
         total: totalFinal,
         totalPuntosGanados,
         setEmailCheckout,
+        lanzarNotificacion,
       }}
     >
       {children}
+
+      {/* Banner de Notificación Gamer Flotante */}
+      {notificacion && (
+        <div
+          className="position-fixed top-0 end-0 m-4 p-3 rounded-4 shadow-lg text-white d-flex align-items-center gap-3 animate__animated animate__fadeInDown"
+          style={{
+            zIndex: 9999,
+            backgroundColor: "#0d111d",
+            border: `2px solid ${notificacion.tipo === "danger" ? "#f43f5e" : "#f59e0b"}`,
+            boxShadow: `0 0 20px ${
+              notificacion.tipo === "danger"
+                ? "rgba(244, 63, 94, 0.4)"
+                : "rgba(245, 158, 11, 0.4)"
+            }`,
+            maxWidth: "420px",
+            backdropFilter: "blur(12px)",
+          }}
+        >
+          <div
+            className="rounded-circle d-flex align-items-center justify-content-center p-2"
+            style={{
+              backgroundColor:
+                notificacion.tipo === "danger"
+                  ? "rgba(244, 63, 94, 0.2)"
+                  : "rgba(245, 158, 11, 0.2)",
+              fontSize: "1.3rem",
+            }}
+          >
+            {notificacion.tipo === "danger" ? "🚨" : "⚡"}
+          </div>
+          <div className="flex-grow-1">
+            <span
+              className="fw-bold d-block text-uppercase"
+              style={{
+                fontSize: "10px",
+                letterSpacing: "1px",
+                color: notificacion.tipo === "danger" ? "#f43f5e" : "#f59e0b",
+              }}
+            >
+              Alerta Level-Up
+            </span>
+            <span style={{ fontSize: "0.85rem", color: "#e2e8f0" }}>
+              {notificacion.mensaje}
+            </span>
+          </div>
+          <button
+            onClick={() => setNotificacion(null)}
+            className="btn-close btn-close-white ms-2 shadow-none"
+            style={{ fontSize: "0.7rem" }}
+          ></button>
+        </div>
+      )}
     </CarritoContext.Provider>
   );
 };
